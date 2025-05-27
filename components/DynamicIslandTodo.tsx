@@ -28,10 +28,16 @@ export default function DynamicIslandTodo() {
   const [isAdding, setIsAdding] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [showProfile, setShowProfile] = useState(false)
+  const [mounted, setMounted] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
+  // 클라이언트 사이드에서만 마운트
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
   // 인증되지 않은 사용자인 경우 AuthModal 표시
-  if (authLoading) {
+  if (!mounted || authLoading) {
     return (
       <motion.div
         className="fixed left-1/2 top-1/2 transform -translate-x-1/2 -translate-y-1/2 z-50"
@@ -104,6 +110,8 @@ export default function DynamicIslandTodo() {
 
   // 초기 데이터 로드 및 실시간 구독
   useEffect(() => {
+    if (!user || !mounted) return
+
     let subscription: any
 
     const loadTodos = async () => {
@@ -134,7 +142,7 @@ export default function DynamicIslandTodo() {
         subscription.unsubscribe()
       }
     }
-  }, [])
+  }, [user, mounted])
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
