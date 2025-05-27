@@ -20,8 +20,12 @@ export default function UserProfile({ onClose }: UserProfileProps) {
   const { user, signOut, loading } = useAuth()
 
   const handleSignOut = async () => {
-    await signOut()
-    onClose()
+    try {
+      await signOut()
+      onClose()
+    } catch (error) {
+      console.error('Sign out error:', error)
+    }
   }
 
   if (loading) {
@@ -62,7 +66,7 @@ export default function UserProfile({ onClose }: UserProfileProps) {
         </div>
         <div className="flex-1">
           <p className="text-white font-medium text-sm">
-            {user?.user_metadata?.display_name || user?.user_metadata?.full_name || '사용자'}
+            {user?.user_metadata?.display_name || user?.user_metadata?.full_name || 'User'}
           </p>
           <p className="text-gray-400 text-xs">{user?.email}</p>
         </div>
@@ -74,7 +78,7 @@ export default function UserProfile({ onClose }: UserProfileProps) {
         className="w-full justify-start text-gray-300 hover:text-white hover:bg-gray-800 p-2 h-auto"
       >
         <LogOut className="h-4 w-4 mr-2" />
-        로그아웃
+        Sign Out
       </Button>
     </motion.div>
   )
