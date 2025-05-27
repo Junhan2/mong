@@ -40,7 +40,7 @@ export default function DynamicIslandTodo() {
       >
         <div className="bg-black border border-gray-800 rounded-full px-6 py-3 flex items-center space-x-2">
           <Loader2 className="h-4 w-4 animate-spin text-yellow-500" />
-          <span className="text-white">로딩 중...</span>
+          <span className="text-white">Loading...</span>
         </div>
       </motion.div>
     )
@@ -57,12 +57,31 @@ export default function DynamicIslandTodo() {
     setIsAdding(true)
     setError(null)
     
+    // 낙관적 업데이트: UI에 즉시 반영
+    const optimisticTodo: Todo = {
+      id: Date.now(), // 임시 ID
+      text: newTodo.trim(),
+      completed: false,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      user_id: user.id
+    }
+    
+    setTodos(prev => [optimisticTodo, ...prev])
+    setNewTodo("")
+    
     try {
-      await todoService.addTodo(newTodo.trim())
-      setNewTodo("")
+      const newTodoFromDb = await todoService.addTodo(newTodo.trim())
+      // 실제 DB 데이터로 교체
+      setTodos(prev => prev.map(todo => 
+        todo.id === optimisticTodo.id ? newTodoFromDb : todo
+      ))
     } catch (error) {
       console.error('Failed to add todo:', error)
       setError('할일을 추가하는데 실패했습니다.')
+      // 실패시 낙관적 업데이트 롤백
+      setTodos(prev => prev.filter(todo => todo.id !== optimisticTodo.id))
+      setNewTodo(newTodo.trim())
     } finally {
       setIsAdding(false)
     }
@@ -72,20 +91,39 @@ export default function DynamicIslandTodo() {
     const todo = todos.find(t => t.id === id)
     if (!todo) return
 
+    // 낙관적 업데이트: UI에 즉시 반영
+    setTodos(prev => prev.map(t => 
+      t.id === id ? { ...t, completed: !t.completed } : t
+    ))
+
     try {
       await todoService.toggleTodo(id, !todo.completed)
     } catch (error) {
       console.error('Failed to toggle todo:', error)
       setError('할일 상태를 변경하는데 실패했습니다.')
+      // 실패시 롤백
+      setTodos(prev => prev.map(t => 
+        t.id === id ? { ...t, completed: todo.completed } : t
+      ))
     }
   }
 
   const removeTodo = async (id: number) => {
+    const todoToRemove = todos.find(t => t.id === id)
+    if (!todoToRemove) return
+
+    // 낙관적 업데이트: UI에서 즉시 제거
+    setTodos(prev => prev.filter(t => t.id !== id))
+
     try {
       await todoService.deleteTodo(id)
     } catch (error) {
       console.error('Failed to delete todo:', error)
       setError('할일을 삭제하는데 실패했습니다.')
+      // 실패시 롤백
+      setTodos(prev => [...prev, todoToRemove].sort((a, b) => 
+        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      ))
     }
   }
 
@@ -130,10 +168,11 @@ export default function DynamicIslandTodo() {
       }
     }
 
-    // 실시간 구독 설정
+    // 실시간 구독 설정 (백그라운드 동기화용)
     const setupSubscription = () => {
-      subscription = todoService.subscribeToTodos((newTodos) => {
+      subscription = todoService.subscribeToTodos(user.id, (newTodos) => {
         if (mounted) {
+          console.log('Background sync: updating todos')
           setTodos(newTodos)
         }
       })
@@ -281,11 +320,11 @@ export default function DynamicIslandTodo() {
                 {isLoading ? (
                   <div className="flex items-center justify-center py-8">
                     <Loader2 className="h-6 w-6 animate-spin text-yellow-500" />
-                    <span className="ml-2 text-gray-400">할일을 불러오는 중...</span>
+                    <span className="ml-2 text-gray-400">Loading todos...</span>
                   </div>
                 ) : todos.length === 0 ? (
                   <div className="text-center py-8 text-gray-400">
-                    할일이 없습니다. 새로운 할일을 추가해보세요!
+                    No todos yet. Add your first one!
                   </div>
                 ) : (
                   <AnimatePresence initial={false}>
@@ -301,7 +340,7 @@ export default function DynamicIslandTodo() {
                       layout
                     >
                       <span
-                        className={`flex-grow text-sm ${
+                        className={`flex-grow text-sm cursor-pointer ${
                           todo.completed ? "text-gray-500 line-through decoration-gray-500" : "text-yellow-500"
                         }`}
                         onClick={() => toggleTodo(todo.id)}
