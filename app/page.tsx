@@ -2,8 +2,10 @@
 
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { useAuth } from '@/lib/auth'
 
 export default function Home() {
+  const { user, loading: authLoading } = useAuth()
   const [isExpanded, setIsExpanded] = useState(false)
   const [newTodo, setNewTodo] = useState('')
   const [todos, setTodos] = useState<string[]>([])
@@ -26,6 +28,49 @@ export default function Home() {
     mass: 1,
   }
 
+  // 인증 로딩 중일 때
+  if (authLoading) {
+    return (
+      <main className="flex min-h-screen items-center justify-center p-4 bg-black">
+        <div className="bg-black border border-gray-800 rounded-full px-6 py-3 flex items-center space-x-2">
+          <div className="w-4 h-4 border-2 border-yellow-500 border-t-transparent rounded-full animate-spin"></div>
+          <span className="text-white">로딩 중...</span>
+        </div>
+      </main>
+    )
+  }
+
+  // 인증되지 않은 사용자일 때
+  if (!user) {
+    return (
+      <main className="flex min-h-screen items-center justify-center p-4 bg-black">
+        <div className="bg-black border border-gray-800 rounded-2xl p-8 max-w-md w-full">
+          <h1 className="text-2xl font-bold text-white mb-4 text-center">Mong에 오신 것을 환영합니다</h1>
+          <p className="text-gray-400 text-center mb-6">로그인이 필요합니다</p>
+          <div className="space-y-4">
+            <input
+              type="email"
+              placeholder="이메일"
+              className="w-full p-3 bg-gray-800 text-white rounded border border-gray-600"
+            />
+            <input
+              type="password"
+              placeholder="비밀번호"
+              className="w-full p-3 bg-gray-800 text-white rounded border border-gray-600"
+            />
+            <button className="w-full bg-yellow-500 text-black font-semibold py-3 rounded">
+              로그인
+            </button>
+          </div>
+          <p className="text-center text-gray-400 mt-4 text-sm">
+            인증 테스트용 - 실제 로그인 기능은 비활성화됨
+          </p>
+        </div>
+      </main>
+    )
+  }
+
+  // 인증된 사용자 - 기존 할일 앱
   return (
     <main className="flex min-h-screen items-center justify-center p-4 bg-black">
       <motion.div
@@ -47,9 +92,14 @@ export default function Home() {
           {!isExpanded ? (
             <div className="p-2 flex items-center justify-between h-full">
               <span className="font-semibold">Mong Todo</span>
-              <span className="bg-yellow-500 text-black rounded-full w-6 h-6 flex items-center justify-center text-xs">
-                {todos.length}
-              </span>
+              <div className="flex items-center space-x-2">
+                <span className="bg-yellow-500 text-black rounded-full w-6 h-6 flex items-center justify-center text-xs">
+                  {todos.length}
+                </span>
+                <div className="w-6 h-6 bg-gray-700 rounded-full flex items-center justify-center">
+                  <span className="text-xs">👤</span>
+                </div>
+              </div>
             </div>
           ) : (
             <motion.div
