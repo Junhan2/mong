@@ -30,26 +30,6 @@ export default function MongTodo() {
   const [showProfile, setShowProfile] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
-  // 인증되지 않은 사용자인 경우 AuthModal 표시
-  if (authLoading) {
-    return (
-      <motion.div
-        className="fixed left-1/2 top-1/2 transform -translate-x-1/2 -translate-y-1/2 z-50"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-      >
-        <div className="bg-black border border-gray-800 rounded-full px-6 py-3 flex items-center space-x-2">
-          <Loader2 className="h-4 w-4 animate-spin text-yellow-500" />
-          <span className="text-white">로딩 중...</span>
-        </div>
-      </motion.div>
-    )
-  }
-
-  if (!user) {
-    return <AuthModal />
-  }
-
   const addTodo = async () => {
     if (newTodo.trim() === "" || isAdding) return
     
@@ -102,41 +82,63 @@ export default function MongTodo() {
   const completedTodos = todos.filter((todo) => todo.completed).length
   const remainingTodos = todos.length - completedTodos
 
-  // 초기 데이터 로드 및 실시간 구독
+  // 초기 데이터 로드 및 실시간 구독 - 항상 실행되도록 수정
   useEffect(() => {
+    if (!user) return
+
     let subscription: any
+    let isMounted = true
 
     const loadTodos = async () => {
+      if (!isMounted) return
+      
       try {
         setIsLoading(true)
         const data = await todoService.getTodos()
-        setTodos(data)
-        setError(null)
+        if (isMounted) {
+          setTodos(data)
+          setError(null)
+        }
       } catch (error) {
-        console.error('Failed to load todos:', error)
-        setError('할일을 불러오는데 실패했습니다.')
+        if (isMounted) {
+          console.error('Failed to load todos:', error)
+          setError('할일을 불러오는데 실패했습니다.')
+        }
       } finally {
-        setIsLoading(false)
+        if (isMounted) {
+          setIsLoading(false)
+        }
       }
     }
 
     // 실시간 구독 설정
     const setupSubscription = () => {
+      if (!isMounted) return
       subscription = todoService.subscribeToTodos((newTodos) => {
-        setTodos(newTodos)
+        if (isMounted) {
+          setTodos(newTodos)
+        }
       })
     }
 
-    loadTodos().then(setupSubscription)
+    loadTodos().then(() => {
+      if (isMounted) {
+        setupSubscription()
+      }
+    })
 
     return () => {
+      isMounted = false
       if (subscription) {
         subscription.unsubscribe()
       }
     }
-  }, [])
+  }, [user])
 
+  // 외부 클릭 처리 - 항상 실행되도록 수정
   useEffect(() => {
+    if (typeof window === 'undefined') return
+
     const handleClickOutside = (event: MouseEvent) => {
       if (isExpanded && !(event.target as Element).closest(".mong-todo")) {
         setIsExpanded(false)
@@ -149,11 +151,32 @@ export default function MongTodo() {
     }
   }, [isExpanded])
 
+  // 입력 포커스 - 항상 실행되도록 수정
   useEffect(() => {
     if (isExpanded && inputRef.current) {
       inputRef.current.focus()
     }
   }, [isExpanded])
+
+  // 인증되지 않은 사용자인 경우 AuthModal 표시
+  if (authLoading) {
+    return (
+      <motion.div
+        className="fixed left-1/2 top-1/2 transform -translate-x-1/2 -translate-y-1/2 z-50"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+      >
+        <div className="bg-black border border-gray-800 rounded-full px-6 py-3 flex items-center space-x-2">
+          <Loader2 className="h-4 w-4 animate-spin text-yellow-500" />
+          <span className="text-white">로딩 중...</span>
+        </div>
+      </motion.div>
+    )
+  }
+
+  if (!user) {
+    return <AuthModal />
+  }
 
   return (
     <motion.div
@@ -276,7 +299,7 @@ export default function MongTodo() {
                   </div>
                 ) : (
                   <AnimatePresence initial={false}>
-                    {sortedTodos.map((todo, index) => (
+                    {sortedTodos.map((todo) => (
                     <motion.li
                       key={todo.id}
                       initial={{ opacity: 0, height: 0 }}
