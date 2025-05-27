@@ -56,7 +56,7 @@ export default function AuthModal() {
     }
   }
 
-  const handleSocialAuth = async (provider: 'google' | 'github' | 'kakao') => {
+  const handleSocialAuth = async (provider: 'google' | 'github') => {
     setLoading(true)
     setError(null)
 
@@ -74,7 +74,7 @@ export default function AuthModal() {
       if (error) {
         // OAuth 설정이 안된 경우 친화적인 메시지
         if (error.status === 400) {
-          throw new Error(`${provider.charAt(0).toUpperCase() + provider.slice(1)} 로그인이 아직 설정되지 않았습니다. 이메일/비밀번호로 로그인해주세요.`)
+          throw new Error(`${provider.charAt(0).toUpperCase() + provider.slice(1)} login is not configured yet. Please use email/password login.`)
         }
         throw error
       }
@@ -99,10 +99,10 @@ export default function AuthModal() {
       >
         <div className="text-center mb-8">
           <h1 className="text-2xl font-bold text-white mb-2">
-            {isLogin ? '로그인' : '회원가입'}
+            {isLogin ? 'Sign In' : 'Sign Up'}
           </h1>
           <p className="text-gray-400">
-            Dynamic Island Todo에 오신 것을 환영합니다
+            Welcome to Dynamic Island Todo
           </p>
         </div>
 
@@ -119,7 +119,7 @@ export default function AuthModal() {
                 type="text"
                 value={displayName}
                 onChange={(e) => setDisplayName(e.target.value)}
-                placeholder="이름"
+                placeholder="Name"
                 className="w-full bg-[#111111] border-[#222222] text-gray-200 placeholder:text-gray-500 pl-10 h-12"
                 required
               />
@@ -132,7 +132,7 @@ export default function AuthModal() {
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="이메일"
+              placeholder="Email"
               className="w-full bg-[#111111] border-[#222222] text-gray-200 placeholder:text-gray-500 pl-10 h-12"
               required
             />
@@ -144,7 +144,7 @@ export default function AuthModal() {
               type={showPassword ? "text" : "password"}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="비밀번호"
+              placeholder="Password"
               className="w-full bg-[#111111] border-[#222222] text-gray-200 placeholder:text-gray-500 pl-10 pr-10 h-12"
               required
               minLength={6}
@@ -164,13 +164,13 @@ export default function AuthModal() {
             disabled={loading}
             className="w-full bg-yellow-500 hover:bg-yellow-600 text-black font-semibold h-12 rounded-lg"
           >
-            {loading ? '처리 중...' : (isLogin ? '로그인' : '회원가입')}
+            {loading ? 'Processing...' : (isLogin ? 'Sign In' : 'Sign Up')}
           </Button>
         </form>
 
         <div className="my-6 flex items-center">
           <Separator className="flex-1 bg-gray-700" />
-          <span className="px-4 text-gray-400 text-sm">또는</span>
+          <span className="px-4 text-gray-400 text-sm">or</span>
           <Separator className="flex-1 bg-gray-700" />
         </div>
 
@@ -186,12 +186,6 @@ export default function AuthModal() {
             onClick={() => handleSocialAuth('github')}
             loading={loading}
           />
-
-          <SocialButton
-            provider="kakao"
-            onClick={() => handleSocialAuth('kakao')}
-            loading={loading}
-          />
         </div>
 
         <div className="mt-6 text-center">
@@ -200,7 +194,7 @@ export default function AuthModal() {
             onClick={() => setIsLogin(!isLogin)}
             className="text-gray-400 hover:text-gray-200 transition-colors"
           >
-            {isLogin ? '계정이 없으신가요? 회원가입' : '이미 계정이 있으신가요? 로그인'}
+            {isLogin ? "Don't have an account? Sign up" : 'Already have an account? Sign in'}
           </button>
         </div>
       </motion.div>
