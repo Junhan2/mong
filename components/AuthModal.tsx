@@ -203,6 +203,20 @@ export default function AuthModal() {
             {isLogin ? '계정이 없으신가요? 회원가입' : '이미 계정이 있으신가요? 로그인'}
           </button>
         </div>
+
+        <div className="mt-4 text-center">
+          <Button
+            variant="outline"
+            onClick={() => {
+              // 데모 모드로 전환 (로컬 스토리지 플래그 설정)
+              localStorage.setItem('demo_mode', 'true')
+              window.location.reload()
+            }}
+            className="text-gray-400 border-gray-700 hover:text-white hover:border-gray-600"
+          >
+            🚀 데모 모드로 체험하기
+          </Button>
+        </div>
       </motion.div>
     </motion.div>
   )
