@@ -1,5 +1,5 @@
-import "./globals.css"
-import "@/styles/DynamicIslandTodo.css"
+import "@/styles/globals.css"
+import "@/styles/MongTodo.css"
 import type { Metadata } from "next"
 import { Inter } from "next/font/google"
 import Script from "next/script"
@@ -12,9 +12,9 @@ const inter = Inter({
 })
 
 export const metadata: Metadata = {
-  title: "Dynamic Island Todo",
-  description: "A todo list component inspired by the dynamic island design",
-  generator: 'v0.dev',
+  title: "Mong",
+  description: "A minimalist todo app with beautiful UI design",
+    generator: 'v0.dev'
 }
 
 export default function RootLayout({
