@@ -32,17 +32,24 @@ export default function ParticleBackground({
   const animationRef = useRef<number>()
 
   useEffect(() => {
+    if (typeof window === 'undefined') return
+
     const canvas = canvasRef.current
     if (!canvas) return
+
     const ctx = canvas.getContext('2d')
     if (!ctx) return
 
+    let isActive = true
+
     const resizeCanvas = () => {
+      if (!isActive || !canvas) return
       canvas.width = window.innerWidth
       canvas.height = window.innerHeight
     }
 
     const initParticles = () => {
+      if (!isActive || !canvas) return
       particlesRef.current = []
       for (let i = 0; i < count; i++) {
         particlesRef.current.push({
@@ -55,12 +62,16 @@ export default function ParticleBackground({
         })
       }
     }
+
     const handleMouseMove = (e: MouseEvent) => {
+      if (!isActive) return
       mouseRef.current.x = e.clientX
       mouseRef.current.y = e.clientY
     }
 
     const animate = () => {
+      if (!isActive || !canvas || !ctx) return
+
       ctx.clearRect(0, 0, canvas.width, canvas.height)
       
       particlesRef.current.forEach((particle, index) => {
@@ -90,7 +101,6 @@ export default function ParticleBackground({
         ctx.fillStyle = `rgba(255, 255, 255, ${particle.opacity})`
         ctx.fill()
 
-        // 연결선 그리기 (성능 최적화를 위해 일부만)
         if (index % 3 === 0) {
           particlesRef.current.slice(index + 1, index + 4).forEach(other => {
             const dx = particle.x - other.x
@@ -109,29 +119,32 @@ export default function ParticleBackground({
         }
       })
 
-      animationRef.current = requestAnimationFrame(animate)
+      if (isActive) {
+        animationRef.current = requestAnimationFrame(animate)
+      }
     }
+
+    const handleResize = () => {
+      resizeCanvas()
+      initParticles()
+    }
+
     resizeCanvas()
     initParticles()
     animate()
 
-    window.addEventListener('resize', () => {
-      resizeCanvas()
-      initParticles()
-    })
-
+    window.addEventListener('resize', handleResize)
     if (mouseInteraction) {
       window.addEventListener('mousemove', handleMouseMove)
     }
 
     return () => {
+      isActive = false
       if (animationRef.current) {
         cancelAnimationFrame(animationRef.current)
       }
-      window.removeEventListener('resize', resizeCanvas)
-      if (mouseInteraction) {
-        window.removeEventListener('mousemove', handleMouseMove)
-      }
+      window.removeEventListener('resize', handleResize)
+      window.removeEventListener('mousemove', handleMouseMove)
     }
   }, [count, spread, speed, baseSize, mouseInteraction])
 
