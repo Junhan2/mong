@@ -16,9 +16,9 @@ export const metadata: Metadata = {
   description: "A minimalist todo app with beautiful UI design",
   generator: 'v0.dev',
   icons: {
-    icon: '/favicon.ico',
-    shortcut: '/favicon-16x16.png',
-    apple: '/apple-touch-icon.png',
+    icon: '/mong-favicon.png',
+    shortcut: '/mong-favicon.png',
+    apple: '/mong-favicon.png',
   },
 }
 
@@ -30,9 +30,9 @@ export default function RootLayout({
   return (
     <html lang="en">
       <head>
-        <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-        <link rel="alternate icon" href="/favicon.ico" />
-        <link rel="mask-icon" href="/favicon.svg" color="#6366f1" />
+        <link rel="icon" href="/mong-favicon.png" type="image/png" />
+        <link rel="alternate icon" href="/mong-favicon.png" />
+        <link rel="mask-icon" href="/mong-favicon.png" color="#6366f1" />
         <Script src="https://unpkg.com/framer-motion@10.12.16/dist/framer-motion.js" strategy="async" />
       </head>
       <body className={`${inter.className} bg-gray-100`}>
