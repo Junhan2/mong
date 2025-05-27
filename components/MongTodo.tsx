@@ -3,11 +3,11 @@
 import type React from "react"
 import { useState, useEffect, useRef } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { Pencil, Plus, X, Check, RotateCcw, Loader2, User as UserIcon, Wifi, WifiOff } from "lucide-react"
+import { Pencil, Plus, X, Check, RotateCcw, Loader2, User as UserIcon } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
-import { supabase, todoService, type Todo } from "@/lib/supabase"
+import { todoService, type Todo } from "@/lib/supabase"
 import { useAuth } from "@/lib/auth"
 import AuthModal from "./AuthModal"
 import UserProfile from "./UserProfile"
@@ -28,216 +28,64 @@ export default function MongTodo() {
   const [isAdding, setIsAdding] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [showProfile, setShowProfile] = useState(false)
-  const [editingId, setEditingId] = useState<number | null>(null)
-  const [editText, setEditText] = useState("")
-  const [realtimeStatus, setRealtimeStatus] = useState<'connected' | 'connecting' | 'disconnected'>('connecting')
-  const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
-  const editInputRef = useRef<HTMLInputElement>(null)
 
-  // 초기 데이터 로드
-  useEffect(() => {
-    if (user && !authLoading) {
-      loadTodos()
-    } else if (!authLoading) {
-      setIsLoading(false)
-    }
-  }, [user, authLoading])
-
-  // 실시간 구독 설정 (개선된 버전)
-  useEffect(() => {
-    if (!user) return
-
-    setRealtimeStatus('connecting')
-    
-    const channel = supabase
-      .channel('todos', {
-        config: {
-          presence: {
-            key: user.id,
-          },
-        },
-      })
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'todos',
-          filter: `user_id=eq.${user.id}`,
-        },
-        (payload) => {
-          console.log('🔄 Realtime update received:', payload)
-          handleRealtimeUpdate(payload)
-          setLastUpdated(new Date())
-        }
-      )
-      .subscribe((status) => {
-        console.log('📡 Realtime status:', status)
-        if (status === 'SUBSCRIBED') {
-          setRealtimeStatus('connected')
-        } else if (status === 'CHANNEL_ERROR') {
-          setRealtimeStatus('disconnected')
-        }
-      })
-
-    return () => {
-      console.log('🔌 Disconnecting realtime channel')
-      supabase.removeChannel(channel)
-      setRealtimeStatus('disconnected')
-    }
-  }, [user])
-
-  // 네트워크 상태 모니터링
-  useEffect(() => {
-    const handleOnline = () => {
-      console.log('🌐 Network: Online')
-      if (user) {
-        // 온라인 복구 시 데이터 다시 로드
-        loadTodos()
-      }
-    }
-
-    const handleOffline = () => {
-      console.log('🌐 Network: Offline')
-      setRealtimeStatus('disconnected')
-    }
-
-    window.addEventListener('online', handleOnline)
-    window.addEventListener('offline', handleOffline)
-
-    return () => {
-      window.removeEventListener('online', handleOnline)
-      window.removeEventListener('offline', handleOffline)
-    }
-  }, [user])
-
-  // 확장 시 입력 필드에 포커스
-  useEffect(() => {
-    if (isExpanded && inputRef.current) {
-      const timer = setTimeout(() => {
-        inputRef.current?.focus()
-      }, 300)
-      return () => clearTimeout(timer)
-    }
-  }, [isExpanded])
-
-  // 편집 시 입력 필드에 포커스
-  useEffect(() => {
-    if (editingId && editInputRef.current) {
-      editInputRef.current.focus()
-      editInputRef.current.select()
-    }
-  }, [editingId])
-
-  const loadTodos = async () => {
-    try {
-      setIsLoading(true)
-      const data = await todoService.getTodos()
-      setTodos(data)
-      setError(null)
-      setLastUpdated(new Date())
-      console.log('📥 Todos loaded:', data.length)
-    } catch (error: any) {
-      console.error('❌ Error loading todos:', error)
-      setError('할일을 불러오는데 실패했습니다.')
-    } finally {
-      setIsLoading(false)
-    }
+  // 인증되지 않은 사용자인 경우 AuthModal 표시
+  if (authLoading) {
+    return (
+      <motion.div
+        className="fixed left-1/2 top-1/2 transform -translate-x-1/2 -translate-y-1/2 z-50"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+      >
+        <div className="bg-black border border-gray-800 rounded-full px-6 py-3 flex items-center space-x-2">
+          <Loader2 className="h-4 w-4 animate-spin text-yellow-500" />
+          <span className="text-white">로딩 중...</span>
+        </div>
+      </motion.div>
+    )
   }
 
-  const handleRealtimeUpdate = (payload: any) => {
-    const { eventType, new: newRecord, old: oldRecord } = payload
-    
-    switch (eventType) {
-      case 'INSERT':
-        console.log('➕ Todo added via realtime:', newRecord)
-        setTodos(prev => {
-          // 중복 방지
-          if (prev.some(todo => todo.id === newRecord.id)) {
-            return prev
-          }
-          return [newRecord, ...prev]
-        })
-        break
-      case 'UPDATE':
-        console.log('✏️ Todo updated via realtime:', newRecord)
-        setTodos(prev => prev.map(todo => 
-          todo.id === newRecord.id ? newRecord : todo
-        ))
-        break
-      case 'DELETE':
-        console.log('🗑️ Todo deleted via realtime:', oldRecord)
-        setTodos(prev => prev.filter(todo => todo.id !== oldRecord.id))
-        break
-    }
+  if (!user) {
+    return <AuthModal />
   }
 
   const addTodo = async () => {
-    if (!newTodo.trim() || isAdding) return
-
+    if (newTodo.trim() === "" || isAdding) return
+    
+    setIsAdding(true)
+    setError(null)
+    
     try {
-      setIsAdding(true)
-      setError(null)
-      
-      console.log('➕ Adding todo:', newTodo.trim())
       await todoService.addTodo(newTodo.trim())
       setNewTodo("")
-      
-      // Realtime으로 업데이트되므로 수동으로 추가하지 않음
-    } catch (error: any) {
-      console.error('❌ Error adding todo:', error)
-      setError('할일 추가에 실패했습니다.')
+    } catch (error) {
+      console.error('Failed to add todo:', error)
+      setError('할일을 추가하는데 실패했습니다.')
     } finally {
       setIsAdding(false)
     }
   }
 
-  const toggleTodo = async (id: number, completed: boolean) => {
+  const toggleTodo = async (id: number) => {
+    const todo = todos.find(t => t.id === id)
+    if (!todo) return
+
     try {
-      console.log(`🔄 Toggling todo ${id} to ${completed ? 'completed' : 'pending'}`)
-      await todoService.toggleTodo(id, completed)
-      // Realtime으로 업데이트됨
-    } catch (error: any) {
-      console.error('❌ Error toggling todo:', error)
-      setError('할일 상태 변경에 실패했습니다.')
+      await todoService.toggleTodo(id, !todo.completed)
+    } catch (error) {
+      console.error('Failed to toggle todo:', error)
+      setError('할일 상태를 변경하는데 실패했습니다.')
     }
   }
 
-  const deleteTodo = async (id: number) => {
+  const removeTodo = async (id: number) => {
     try {
-      console.log('🗑️ Deleting todo:', id)
       await todoService.deleteTodo(id)
-      // Realtime으로 업데이트됨
-    } catch (error: any) {
-      console.error('❌ Error deleting todo:', error)
-      setError('할일 삭제에 실패했습니다.')
+    } catch (error) {
+      console.error('Failed to delete todo:', error)
+      setError('할일을 삭제하는데 실패했습니다.')
     }
-  }
-
-  const startEditing = (todo: Todo) => {
-    setEditingId(todo.id)
-    setEditText(todo.text)
-  }
-
-  const saveEdit = async () => {
-    if (!editText.trim() || !editingId) return
-
-    try {
-      console.log(`✏️ Updating todo ${editingId}:`, editText.trim())
-      await todoService.updateTodo(editingId, editText.trim())
-      setEditingId(null)
-      setEditText("")
-      // Realtime으로 업데이트됨
-    } catch (error: any) {
-      console.error('❌ Error updating todo:', error)
-      setError('할일 수정에 실패했습니다.')
-    }
-  }
-
-  const cancelEdit = () => {
-    setEditingId(null)
-    setEditText("")
   }
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -246,364 +94,244 @@ export default function MongTodo() {
     }
   }
 
-  const handleEditKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter") {
-      saveEdit()
-    } else if (e.key === "Escape") {
-      cancelEdit()
+  const sortedTodos = [...todos].sort((a, b) => {
+    if (a.completed === b.completed) return 0
+    return a.completed ? 1 : -1
+  })
+
+  const completedTodos = todos.filter((todo) => todo.completed).length
+  const remainingTodos = todos.length - completedTodos
+
+  // 초기 데이터 로드 및 실시간 구독
+  useEffect(() => {
+    let subscription: any
+
+    const loadTodos = async () => {
+      try {
+        setIsLoading(true)
+        const data = await todoService.getTodos()
+        setTodos(data)
+        setError(null)
+      } catch (error) {
+        console.error('Failed to load todos:', error)
+        setError('할일을 불러오는데 실패했습니다.')
+      } finally {
+        setIsLoading(false)
+      }
     }
-  }
 
-  const completedCount = todos.filter(todo => todo.completed).length
-  const pendingCount = todos.filter(todo => !todo.completed).length
-  const totalCount = todos.length
+    // 실시간 구독 설정
+    const setupSubscription = () => {
+      subscription = todoService.subscribeToTodos((newTodos) => {
+        setTodos(newTodos)
+      })
+    }
 
-  // 인증 로딩 중
-  if (authLoading) {
-    return (
-      <motion.div
-        className="flex items-center justify-center w-16 h-8 bg-black rounded-full border border-gray-800"
-        animate={{ scale: [1, 1.05, 1] }}
-        transition={{ duration: 2, repeat: Infinity }}
-      >
-        <Loader2 className="w-4 h-4 text-gray-400 animate-spin" />
-      </motion.div>
-    )
-  }
+    loadTodos().then(setupSubscription)
 
-  // 미인증 상태
-  if (!user) {
-    return <AuthModal />
-  }
+    return () => {
+      if (subscription) {
+        subscription.unsubscribe()
+      }
+    }
+  }, [])
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (isExpanded && !(event.target as Element).closest(".mong-todo")) {
+        setIsExpanded(false)
+      }
+    }
+
+    document.addEventListener("mousedown", handleClickOutside)
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside)
+    }
+  }, [isExpanded])
+
+  useEffect(() => {
+    if (isExpanded && inputRef.current) {
+      inputRef.current.focus()
+    }
+  }, [isExpanded])
 
   return (
-    <>
+    <motion.div
+      className="fixed left-1/2 top-1/2 transform -translate-x-1/2 -translate-y-1/2 z-50 mong-todo"
+      initial={false}
+      animate={{
+        width: isExpanded ? "var(--di-expanded-width)" : "var(--di-collapsed-width)",
+        height: isExpanded ? "auto" : "var(--di-collapsed-height)",
+        borderRadius: isExpanded ? "var(--di-expanded-radius)" : "var(--di-border-radius)",
+      }}
+      transition={{
+        ...snappyTransition,
+        borderRadius: { duration: 0.08 },
+      }}
+    >
       <motion.div
-        className="relative bg-black border border-gray-800 rounded-2xl overflow-hidden"
+        className="bg-black text-white h-full cursor-pointer overflow-hidden rounded-[inherit] border border-gray-800"
+        onClick={() => !isExpanded && setIsExpanded(true)}
         layout
         transition={snappyTransition}
-        animate={{
-          width: isExpanded ? "600px" : "200px",
-          height: isExpanded ? "500px" : "50px",
-        }}
       >
-        {/* 컴팩트 상태 */}
-        <AnimatePresence>
-          {!isExpanded && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.2 }}
-              className="flex items-center justify-between h-full px-4 cursor-pointer"
-              onClick={() => setIsExpanded(true)}
-            >
-              <div className="flex items-center space-x-2">
-                <div className="text-sm font-medium text-white">
-                  Mong
-                </div>
-                {/* 실시간 연결 상태 표시 */}
-                <div className="flex items-center">
-                  {realtimeStatus === 'connected' ? (
-                    <Wifi className="w-3 h-3 text-green-500" />
-                  ) : realtimeStatus === 'connecting' ? (
-                    <Loader2 className="w-3 h-3 text-yellow-500 animate-spin" />
-                  ) : (
-                    <WifiOff className="w-3 h-3 text-red-500" />
+        {!isExpanded && (
+          <motion.div className="p-2 flex items-center justify-between h-full" layout>
+            <span className="font-semibold">Mong</span>
+            <div className="flex items-center space-x-2 h-full">
+              {isLoading ? (
+                <Loader2 className="h-4 w-4 animate-spin text-yellow-500" />
+              ) : (
+                <>
+                  {remainingTodos > 0 && (
+                    <span className="bg-yellow-500 text-black rounded-full w-6 h-6 min-w-[24px] flex items-center justify-center text-xs font-medium">
+                      {remainingTodos}
+                    </span>
                   )}
-                </div>
-              </div>
-              
-              <div className="flex items-center space-x-2">
-                {pendingCount > 0 && (
-                  <motion.div
-                    className="bg-yellow-500 text-black px-2 py-1 rounded-full text-xs font-bold"
-                    initial={{ scale: 0 }}
-                    animate={{ scale: 1 }}
-                    transition={snappyTransition}
+                  {completedTodos > 0 && (
+                    <span className="bg-gray-500 text-white rounded-full w-6 h-6 min-w-[24px] flex items-center justify-center text-xs font-medium">
+                      {completedTodos}
+                    </span>
+                  )}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setShowProfile(!showProfile)
+                    }}
+                    className="w-6 h-6 bg-gray-700 hover:bg-gray-600 rounded-full flex items-center justify-center transition-colors"
                   >
-                    {pendingCount}
-                  </motion.div>
-                )}
-                {completedCount > 0 && (
-                  <motion.div
-                    className="bg-gray-600 text-white px-2 py-1 rounded-full text-xs font-bold"
-                    initial={{ scale: 0 }}
-                    animate={{ scale: 1 }}
-                    transition={snappyTransition}
-                  >
-                    {completedCount}
-                  </motion.div>
-                )}
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {/* 확장 상태 */}
+                    {user?.user_metadata?.avatar_url ? (
+                      <img 
+                        src={user.user_metadata.avatar_url} 
+                        alt="Profile" 
+                        className="w-full h-full rounded-full object-cover"
+                      />
+                    ) : (
+                      <UserIcon className="h-3 w-3 text-white" />
+                    )}
+                  </button>
+                </>
+              )}
+            </div>
+          </motion.div>
+        )}
         <AnimatePresence>
           {isExpanded && (
             <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.3, delay: 0.1 }}
-              className="p-6 h-full flex flex-col"
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={{
+                ...snappyTransition,
+                opacity: { duration: 0.1 },
+              }}
+              className="p-4 pb-2"
             >
-              {/* 헤더 */}
-              <div className="flex items-center justify-between mb-6">
-                <div className="flex items-center space-x-3">
-                  <h1 className="text-xl font-bold text-white">Mong</h1>
-                  <div className="flex items-center space-x-2">
-                    {/* 실시간 연결 상태 상세 표시 */}
-                    <div className="flex items-center space-x-1">
-                      {realtimeStatus === 'connected' ? (
-                        <div className="flex items-center space-x-1 text-green-500">
-                          <Wifi className="w-3 h-3" />
-                          <span className="text-xs">실시간</span>
-                        </div>
-                      ) : realtimeStatus === 'connecting' ? (
-                        <div className="flex items-center space-x-1 text-yellow-500">
-                          <Loader2 className="w-3 h-3 animate-spin" />
-                          <span className="text-xs">연결중</span>
-                        </div>
-                      ) : (
-                        <div className="flex items-center space-x-1 text-red-500">
-                          <WifiOff className="w-3 h-3" />
-                          <span className="text-xs">오프라인</span>
-                        </div>
-                      )}
-                    </div>
-                    {pendingCount > 0 && (
-                      <span className="bg-yellow-500 text-black px-2 py-1 rounded-full text-xs font-bold">
-                        {pendingCount}
-                      </span>
-                    )}
-                    {completedCount > 0 && (
-                      <span className="bg-gray-600 text-white px-2 py-1 rounded-full text-xs font-bold">
-                        {completedCount}
-                      </span>
-                    )}
-                  </div>
+              <div className="flex mb-4 items-center">
+                <div className="flex-grow relative mr-2">
+                  <Input
+                    type="text"
+                    value={newTodo}
+                    onChange={(e) => setNewTodo(e.target.value)}
+                    onKeyPress={handleKeyPress}
+                    placeholder="Add a new todo"
+                    className="w-full bg-[#111111] border-[#222222] text-gray-200 placeholder:text-gray-500 focus:border-[#333333] focus:outline-none focus:ring-0 focus:ring-offset-0 h-10 pl-10 transition-colors duration-200 rounded-lg"
+                    ref={inputRef}
+                    aria-label="New todo input"
+                    disabled={isAdding}
+                  />
+                  <Pencil className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-500" />
                 </div>
-                
-                <div className="flex items-center space-x-2">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setShowProfile(true)}
-                    className="text-gray-400 hover:text-white p-2"
-                  >
-                    <UserIcon className="w-4 h-4" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setIsExpanded(false)}
-                    className="text-gray-400 hover:text-white p-2"
-                  >
-                    <X className="w-4 h-4" />
-                  </Button>
-                </div>
-              </div>
-
-              {/* 마지막 업데이트 시간 표시 */}
-              {lastUpdated && (
-                <div className="text-xs text-gray-500 mb-4">
-                  마지막 동기화: {lastUpdated.toLocaleTimeString()}
-                </div>
-              )}
-
-              {/* 에러 표시 */}
-              {error && (
-                <motion.div
-                  initial={{ opacity: 0, y: -10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="bg-red-500/10 border border-red-500/20 text-red-400 px-3 py-2 rounded-lg text-sm mb-4"
-                >
-                  {error}
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setError(null)}
-                    className="ml-2 p-0 h-auto text-red-400 hover:text-red-300"
-                  >
-                    <X className="w-3 h-3" />
-                  </Button>
-                </motion.div>
-              )}
-
-              {/* 할일 추가 */}
-              <div className="flex space-x-2 mb-6">
-                <Input
-                  ref={inputRef}
-                  value={newTodo}
-                  onChange={(e) => setNewTodo(e.target.value)}
-                  onKeyPress={handleKeyPress}
-                  placeholder="새 할일을 입력하세요..."
-                  className="flex-1 bg-gray-900 border-gray-700 text-white placeholder:text-gray-500"
-                  disabled={isAdding}
-                />
                 <Button
                   onClick={addTodo}
-                  disabled={!newTodo.trim() || isAdding}
-                  className="bg-yellow-500 hover:bg-yellow-600 text-black font-semibold px-4"
+                  disabled={isAdding || newTodo.trim() === ""}
+                  className="bg-[#111111] hover:bg-[#222222] text-gray-400 hover:text-gray-200 transition-colors h-10 px-3 border border-[#222222] rounded-lg disabled:opacity-50"
                 >
-                  {isAdding ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <Plus className="w-4 h-4" />
-                  )}
+                  {isAdding ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}
                 </Button>
               </div>
-
-              <Separator className="bg-gray-800 mb-4" />
-
-              {/* 할일 목록 */}
-              <div className="flex-1 overflow-y-auto space-y-2">
+              
+              {error && (
+                <div className="mb-2 p-2 bg-red-900/50 border border-red-800 rounded-lg text-red-200 text-sm">
+                  {error}
+                  <Button
+                    onClick={() => setError(null)}
+                    variant="ghost"
+                    size="sm"
+                    className="ml-2 p-0 h-auto text-red-200 hover:text-red-100"
+                  >
+                    <X size={12} />
+                  </Button>
+                </div>
+              )}
+              <motion.ul className="space-y-2 max-h-60 overflow-y-auto" role="list" aria-label="Todo list" layout>
                 {isLoading ? (
                   <div className="flex items-center justify-center py-8">
-                    <Loader2 className="w-6 h-6 text-gray-400 animate-spin" />
+                    <Loader2 className="h-6 w-6 animate-spin text-yellow-500" />
+                    <span className="ml-2 text-gray-400">할일을 불러오는 중...</span>
                   </div>
                 ) : todos.length === 0 ? (
-                  <div className="flex items-center justify-center py-8 text-gray-500">
-                    아직 할일이 없습니다
+                  <div className="text-center py-8 text-gray-400">
+                    할일이 없습니다. 새로운 할일을 추가해보세요!
                   </div>
                 ) : (
-                  <AnimatePresence>
-                    {/* 미완료 할일들 먼저 표시 */}
-                    {todos
-                      .filter(todo => !todo.completed)
-                      .map((todo) => (
-                        <motion.div
-                          key={todo.id}
-                          layout
-                          initial={{ opacity: 0, x: -20 }}
-                          animate={{ opacity: 1, x: 0 }}
-                          exit={{ opacity: 0, x: 20 }}
-                          transition={snappyTransition}
-                          className="flex items-center space-x-3 p-3 bg-gray-900 rounded-lg border border-gray-800 group"
+                  <AnimatePresence initial={false}>
+                    {sortedTodos.map((todo, index) => (
+                    <motion.li
+                      key={todo.id}
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: "auto" }}
+                      exit={{ opacity: 0, height: 0 }}
+                      transition={snappyTransition}
+                      className="flex items-center justify-between"
+                      role="listitem"
+                      layout
+                    >
+                      <span
+                        className={`flex-grow text-sm ${
+                          todo.completed ? "text-gray-500 line-through decoration-gray-500" : "text-yellow-500"
+                        }`}
+                        onClick={() => toggleTodo(todo.id)}
+                      >
+                        {todo.text}
+                      </span>
+                      <div className="flex items-center bg-[#111111] rounded-md border border-[#222222]">
+                        <Button
+                          onClick={() => toggleTodo(todo.id)}
+                          size="sm"
+                          variant="ghost"
+                          className="h-10 px-3 text-gray-400 hover:text-gray-200 hover:bg-[#222222] rounded-none"
+                          aria-label={`${todo.completed ? "Revert" : "Complete"} "${todo.text}"`}
                         >
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => toggleTodo(todo.id, true)}
-                            className="p-0 w-5 h-5 rounded-full border-2 border-gray-600 hover:border-yellow-500 transition-colors"
-                          />
-                          
-                          {editingId === todo.id ? (
-                            <div className="flex-1 flex items-center space-x-2">
-                              <Input
-                                ref={editInputRef}
-                                value={editText}
-                                onChange={(e) => setEditText(e.target.value)}
-                                onKeyPress={handleEditKeyPress}
-                                className="flex-1 bg-gray-800 border-gray-700 text-white text-sm"
-                              />
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={saveEdit}
-                                className="p-1 text-green-400 hover:text-green-300"
-                              >
-                                <Check className="w-4 h-4" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={cancelEdit}
-                                className="p-1 text-red-400 hover:text-red-300"
-                              >
-                                <X className="w-4 h-4" />
-                              </Button>
-                            </div>
-                          ) : (
-                            <>  
-                              <span className="flex-1 text-white text-sm">
-                                {todo.text}
-                              </span>
-                              <div className="flex items-center space-x-1">
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => startEditing(todo)}
-                                  className="p-1 text-gray-400 hover:text-white opacity-0 group-hover:opacity-100 transition-opacity"
-                                >
-                                  <Pencil className="w-3 h-3" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => deleteTodo(todo.id)}
-                                  className="p-1 text-gray-400 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
-                                >
-                                  <X className="w-3 h-3" />
-                                </Button>
-                              </div>
-                            </>
-                          )}
-                        </motion.div>
-                      ))}
-                    
-                    {/* 완료된 할일들 */}
-                    {todos
-                      .filter(todo => todo.completed)
-                      .map((todo) => (
-                        <motion.div
-                          key={todo.id}
-                          layout
-                          initial={{ opacity: 0, x: -20 }}
-                          animate={{ opacity: 1, x: 0 }}
-                          exit={{ opacity: 0, x: 20 }}
-                          transition={snappyTransition}
-                          className="flex items-center space-x-3 p-3 bg-gray-900/50 rounded-lg border border-gray-800/50 group"
+                          {todo.completed ? <RotateCcw size={14} /> : <Check size={14} />}
+                        </Button>
+                        <Separator orientation="vertical" className="h-5 bg-[#222222]" />
+                        <Button
+                          onClick={() => removeTodo(todo.id)}
+                          size="sm"
+                          variant="ghost"
+                          className="h-10 px-3 text-gray-400 hover:text-gray-200 hover:bg-[#222222] rounded-none"
+                          aria-label={`Remove "${todo.text}" from the list`}
                         >
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => toggleTodo(todo.id, false)}
-                            className="p-0 w-5 h-5 rounded-full bg-green-500 hover:bg-green-600 transition-colors flex items-center justify-center"
-                          >
-                            <Check className="w-3 h-3 text-white" />
-                          </Button>
-                          
-                          <span className="flex-1 text-gray-500 text-sm line-through">
-                            {todo.text}
-                          </span>
-                          
-                          <div className="flex items-center space-x-1">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => toggleTodo(todo.id, false)}
-                              className="p-1 text-gray-500 hover:text-yellow-400 opacity-0 group-hover:opacity-100 transition-opacity"
-                            >
-                              <RotateCcw className="w-3 h-3" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => deleteTodo(todo.id)}
-                              className="p-1 text-gray-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
-                            >
-                              <X className="w-3 h-3" />
-                            </Button>
-                          </div>
-                        </motion.div>
-                      ))}
+                          <X size={14} />
+                        </Button>
+                      </div>
+                    </motion.li>
+                  ))}
                   </AnimatePresence>
                 )}
-              </div>
+              </motion.ul>
             </motion.div>
           )}
         </AnimatePresence>
       </motion.div>
-
-      {/* 사용자 프로필 모달 */}
-      <UserProfile 
-        isOpen={showProfile} 
-        onClose={() => setShowProfile(false)} 
-      />
-    </>
+      
+      {/* 사용자 프로필 */}
+      <AnimatePresence>
+        {showProfile && (
+          <UserProfile onClose={() => setShowProfile(false)} />
+        )}
+      </AnimatePresence>
+    </motion.div>
   )
 }
