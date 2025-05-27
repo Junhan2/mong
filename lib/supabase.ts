@@ -12,7 +12,6 @@ export interface Todo {
   completed: boolean
   created_at: string
   updated_at: string
-  user_id: string
 }
 
 // Database operations
@@ -64,6 +63,23 @@ export const todoService = {
     return data as Todo
   },
 
+  // todo 텍스트 수정
+  async updateTodo(id: number, text: string) {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) throw new Error('User not authenticated')
+
+    const { data, error } = await supabase
+      .from('todos')
+      .update({ text, updated_at: new Date().toISOString() })
+      .eq('id', id)
+      .eq('user_id', user.id)
+      .select()
+      .single()
+    
+    if (error) throw error
+    return data as Todo
+  },
+
   // todo 삭제
   async deleteTodo(id: number) {
     const { data: { user } } = await supabase.auth.getUser()
@@ -79,20 +95,13 @@ export const todoService = {
   },
 
   // 실시간 구독 (현재 사용자만)
-  subscribeToTodos(userId: string, callback: (todos: Todo[]) => void) {
-    console.log('Setting up subscription for user:', userId)
-    
+  subscribeToTodos(callback: (todos: Todo[]) => void) {
     return supabase
-      .channel(`todos-${userId}`)
+      .channel('todos')
       .on('postgres_changes', 
-        { 
-          event: '*', 
-          schema: 'public', 
-          table: 'todos',
-          filter: `user_id=eq.${userId}`
-        },
-        async (payload) => {
-          console.log('Real-time update received:', payload)
+        { event: '*', schema: 'public', table: 'todos' },
+        async () => {
+          // 변경 사항이 있을 때마다 최신 데이터를 가져와서 콜백 실행
           try {
             const todos = await this.getTodos()
             callback(todos)
@@ -101,8 +110,6 @@ export const todoService = {
           }
         }
       )
-      .subscribe((status) => {
-        console.log('Subscription status:', status)
-      })
+      .subscribe()
   }
 }
