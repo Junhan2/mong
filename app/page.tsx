@@ -1,14 +1,11 @@
 import SimpleMongTodo from "@/components/SimpleMongTodo"
-import ParticleBackground from "@/components/ParticleBackground"
+import SimpleParticleBackground from "@/components/SimpleParticleBackground"
 
 export default function Home() {
   return (
     <main className="flex min-h-screen items-center justify-center p-4 bg-black">
-      <ParticleBackground 
-        count={100}
-        spread={10}
-        speed={0.1}
-        baseSize={50}
+      <SimpleParticleBackground 
+        count={50}
         mouseInteraction={true}
       />
       <SimpleMongTodo />
