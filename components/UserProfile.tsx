@@ -1,10 +1,10 @@
 'use client'
 
+import { useEffect, useRef } from 'react'
 import { motion } from 'framer-motion'
 import { User, LogOut, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useAuth } from '@/lib/auth'
-import { useEffect, useRef } from 'react'
 
 const snappyTransition = {
   type: "spring",
@@ -19,33 +19,42 @@ interface UserProfileProps {
 
 export default function UserProfile({ onClose }: UserProfileProps) {
   const { user, signOut, loading } = useAuth()
-  const mountedRef = useRef(true)
+  const profileRef = useRef<HTMLDivElement>(null)
 
+  // ESC 키와 외부 클릭 처리
   useEffect(() => {
-    return () => {
-      mountedRef.current = false
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        onClose()
+      }
     }
-  }, [])
+
+    const handleClickOutside = (event: MouseEvent) => {
+      if (profileRef.current && !profileRef.current.contains(event.target as Node)) {
+        onClose()
+      }
+    }
+
+    // 이벤트 리스너 등록
+    document.addEventListener('keydown', handleKeyDown)
+    document.addEventListener('mousedown', handleClickOutside)
+
+    // 컴포넌트 언마운트 시 이벤트 리스너 제거
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown)
+      document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [onClose])
 
   const handleSignOut = async () => {
-    try {
-      // 먼저 UI를 닫음
-      onClose()
-      
-      // 약간의 지연 후 로그아웃 실행
-      setTimeout(async () => {
-        if (mountedRef.current) {
-          await signOut()
-        }
-      }, 100)
-    } catch (error) {
-      console.error('Sign out error:', error)
-    }
+    await signOut()
+    onClose()
   }
 
   if (loading) {
     return (
       <motion.div
+        ref={profileRef}
         className="fixed top-4 right-4 bg-black border border-gray-800 rounded-2xl p-4 min-w-[200px] z-50"
         initial={{ opacity: 0, scale: 0.9, y: -10 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -61,6 +70,7 @@ export default function UserProfile({ onClose }: UserProfileProps) {
 
   return (
     <motion.div
+      ref={profileRef}
       className="fixed top-4 right-4 bg-black border border-gray-800 rounded-2xl p-4 min-w-[250px] z-50"
       initial={{ opacity: 0, scale: 0.9, y: -10 }}
       animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -81,7 +91,7 @@ export default function UserProfile({ onClose }: UserProfileProps) {
         </div>
         <div className="flex-1">
           <p className="text-white font-medium text-sm">
-            {user?.user_metadata?.display_name || user?.user_metadata?.full_name || 'User'}
+            {user?.user_metadata?.display_name || user?.user_metadata?.full_name || '사용자'}
           </p>
           <p className="text-gray-400 text-xs">{user?.email}</p>
         </div>
@@ -93,7 +103,7 @@ export default function UserProfile({ onClose }: UserProfileProps) {
         className="w-full justify-start text-gray-300 hover:text-white hover:bg-gray-800 p-2 h-auto"
       >
         <LogOut className="h-4 w-4 mr-2" />
-        Sign Out
+        로그아웃
       </Button>
     </motion.div>
   )
