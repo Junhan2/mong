@@ -30,9 +30,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [session, setSession] = useState<Session | null>(null)
   const [loading, setLoading] = useState(true)
+  const [mounted, setMounted] = useState(false)
 
   useEffect(() => {
-    let mounted = true
+    setMounted(true)
+  }, [])
+
+  useEffect(() => {
+    if (!mounted) return
+
+    let isSubscribed = true
     
     // 현재 세션 가져오기
     const getSession = async () => {
@@ -43,14 +50,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           return
         }
         
-        if (mounted) {
+        if (isSubscribed) {
           setSession(session)
           setUser(session?.user ?? null)
           setLoading(false)
         }
       } catch (error) {
         console.error('Error in getSession:', error)
-        if (mounted) {
+        if (isSubscribed) {
           setLoading(false)
         }
       }
@@ -60,8 +67,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     // 인증 상태 변경 리스너 설정
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        if (mounted) {
+      (event, session) => {
+        if (isSubscribed) {
           console.log('Auth state changed:', event, session?.user?.email)
           setSession(session)
           setUser(session?.user ?? null)
@@ -71,10 +78,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     )
 
     return () => {
-      mounted = false
+      isSubscribed = false
       subscription.unsubscribe()
     }
-  }, [])
+  }, [mounted])
 
   const signOut = async () => {
     try {
@@ -85,6 +92,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch (error) {
       console.error('Error in signOut:', error)
     }
+  }
+
+  // 마운트되기 전에는 로딩 표시
+  if (!mounted) {
+    return (
+      <AuthContext.Provider value={{ user: null, session: null, loading: true, signOut }}>
+        {children}
+      </AuthContext.Provider>
+    )
   }
 
   return (
