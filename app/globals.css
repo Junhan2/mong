@@ -12,6 +12,15 @@ body {
   }
 }
 
+/* Dynamic Island Variables */
+:root {
+  --di-collapsed-width: 150px;
+  --di-collapsed-height: 40px;
+  --di-expanded-width: 350px;
+  --di-border-radius: 20px;
+  --di-expanded-radius: 16px;
+}
+
 @layer base {
   :root {
     --background: 0 0% 100%;
