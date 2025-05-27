@@ -11,6 +11,7 @@ import { todoService, type Todo } from "@/lib/supabase"
 import { useAuth } from "@/lib/auth"
 import AuthModal from "./AuthModal"
 import UserProfile from "./UserProfile"
+import MongLogo from "./MongLogo"
 
 const snappyTransition = {
   type: "spring",
@@ -177,7 +178,10 @@ export default function MongTodo() {
       >
         {!isExpanded && (
           <motion.div className="p-2 flex items-center justify-between h-full" layout>
-            <span className="font-semibold">Mong</span>
+            <div className="flex items-center space-x-2">
+              <MongLogo size={18} />
+              <span className="font-semibold">Mong</span>
+            </div>
             <div className="flex items-center space-x-2 h-full">
               {isLoading ? (
                 <Loader2 className="h-4 w-4 animate-spin text-yellow-500" />
