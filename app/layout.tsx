@@ -15,9 +15,6 @@ export const metadata: Metadata = {
   title: "Dynamic Island Todo",
   description: "A todo list component inspired by the dynamic island design",
   generator: 'v0.dev',
-  icons: {
-    icon: '/favicon.ico',
-  },
 }
 
 export default function RootLayout({
