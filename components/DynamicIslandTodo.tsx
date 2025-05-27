@@ -28,16 +28,10 @@ export default function DynamicIslandTodo() {
   const [isAdding, setIsAdding] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [showProfile, setShowProfile] = useState(false)
-  const [mounted, setMounted] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
-  // 클라이언트 사이드에서만 마운트
-  useEffect(() => {
-    setMounted(true)
-  }, [])
-
-  // 인증되지 않은 사용자인 경우 AuthModal 표시
-  if (!mounted || authLoading) {
+  // 인증 로딩 중일 때
+  if (authLoading) {
     return (
       <motion.div
         className="fixed left-1/2 top-1/2 transform -translate-x-1/2 -translate-y-1/2 z-50"
@@ -52,6 +46,7 @@ export default function DynamicIslandTodo() {
     )
   }
 
+  // 로그인하지 않은 경우
   if (!user) {
     return <AuthModal />
   }
@@ -110,39 +105,49 @@ export default function DynamicIslandTodo() {
 
   // 초기 데이터 로드 및 실시간 구독
   useEffect(() => {
-    if (!user || !mounted) return
+    if (!user) return
 
+    let mounted = true
     let subscription: any
 
     const loadTodos = async () => {
       try {
         setIsLoading(true)
         const data = await todoService.getTodos()
-        setTodos(data)
-        setError(null)
+        if (mounted) {
+          setTodos(data)
+          setError(null)
+        }
       } catch (error) {
         console.error('Failed to load todos:', error)
-        setError('할일을 불러오는데 실패했습니다.')
+        if (mounted) {
+          setError('할일을 불러오는데 실패했습니다.')
+        }
       } finally {
-        setIsLoading(false)
+        if (mounted) {
+          setIsLoading(false)
+        }
       }
     }
 
     // 실시간 구독 설정
     const setupSubscription = () => {
       subscription = todoService.subscribeToTodos((newTodos) => {
-        setTodos(newTodos)
+        if (mounted) {
+          setTodos(newTodos)
+        }
       })
     }
 
     loadTodos().then(setupSubscription)
 
     return () => {
+      mounted = false
       if (subscription) {
         subscription.unsubscribe()
       }
     }
-  }, [user, mounted])
+  }, [user])
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
