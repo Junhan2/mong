@@ -1,4 +1,4 @@
-import "@/styles/globals.css"
+import "./globals.css"
 import "@/styles/DynamicIslandTodo.css"
 import type { Metadata } from "next"
 import { Inter } from "next/font/google"
