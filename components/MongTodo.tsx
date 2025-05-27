@@ -1,4 +1,4 @@
-"use client"
+'use client'
 
 import type React from "react"
 import { useState, useEffect, useRef } from "react"
@@ -20,6 +20,7 @@ const snappyTransition = {
 }
 
 export default function MongTodo() {
+  // 모든 Hook을 최상단에 배치 (React Hook #310 오류 방지)
   const { user, loading: authLoading } = useAuth()
   const [todos, setTodos] = useState<Todo[]>([])
   const [newTodo, setNewTodo] = useState("")
@@ -30,6 +31,7 @@ export default function MongTodo() {
   const [showProfile, setShowProfile] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
+  // 할일 관련 함수들
   const addTodo = async () => {
     if (newTodo.trim() === "" || isAdding) return
     
@@ -74,6 +76,7 @@ export default function MongTodo() {
     }
   }
 
+  // 할일 정렬 및 통계
   const sortedTodos = [...todos].sort((a, b) => {
     if (a.completed === b.completed) return 0
     return a.completed ? 1 : -1
@@ -82,15 +85,13 @@ export default function MongTodo() {
   const completedTodos = todos.filter((todo) => todo.completed).length
   const remainingTodos = todos.length - completedTodos
 
-  // 초기 데이터 로드 및 실시간 구독 - 항상 실행되도록 수정
+  // 초기 데이터 로드 및 실시간 구독 - 사용자 상태와 무관하게 항상 실행
   useEffect(() => {
-    if (!user) return
-
     let subscription: any
     let isMounted = true
 
     const loadTodos = async () => {
-      if (!isMounted) return
+      if (!user || !isMounted) return
       
       try {
         setIsLoading(true)
@@ -113,7 +114,7 @@ export default function MongTodo() {
 
     // 실시간 구독 설정
     const setupSubscription = () => {
-      if (!isMounted) return
+      if (!user || !isMounted) return
       subscription = todoService.subscribeToTodos((newTodos) => {
         if (isMounted) {
           setTodos(newTodos)
@@ -121,11 +122,16 @@ export default function MongTodo() {
       })
     }
 
-    loadTodos().then(() => {
-      if (isMounted) {
-        setupSubscription()
-      }
-    })
+    if (user) {
+      loadTodos().then(() => {
+        if (isMounted) {
+          setupSubscription()
+        }
+      })
+    } else {
+      setIsLoading(false)
+      setTodos([])
+    }
 
     return () => {
       isMounted = false
@@ -135,7 +141,7 @@ export default function MongTodo() {
     }
   }, [user])
 
-  // 외부 클릭 처리 - 항상 실행되도록 수정
+  // 외부 클릭 처리 - 항상 실행
   useEffect(() => {
     if (typeof window === 'undefined') return
 
@@ -151,14 +157,14 @@ export default function MongTodo() {
     }
   }, [isExpanded])
 
-  // 입력 포커스 - 항상 실행되도록 수정
+  // 입력 포커스 - 항상 실행
   useEffect(() => {
     if (isExpanded && inputRef.current) {
       inputRef.current.focus()
     }
   }, [isExpanded])
 
-  // 인증되지 않은 사용자인 경우 AuthModal 표시
+  // 인증 로딩 중
   if (authLoading) {
     return (
       <motion.div
@@ -174,10 +180,12 @@ export default function MongTodo() {
     )
   }
 
+  // 인증되지 않은 사용자
   if (!user) {
     return <AuthModal />
   }
 
+  // 메인 할일 관리 UI
   return (
     <motion.div
       className="fixed left-1/2 top-1/2 transform -translate-x-1/2 -translate-y-1/2 z-50 mong-todo"
@@ -200,7 +208,7 @@ export default function MongTodo() {
       >
         {!isExpanded && (
           <motion.div className="p-2 flex items-center justify-between h-full" layout>
-            <span className="font-semibold">To-do List</span>
+            <span className="font-semibold">Mong</span>
             <div className="flex items-center space-x-2 h-full">
               {isLoading ? (
                 <Loader2 className="h-4 w-4 animate-spin text-yellow-500" />
@@ -257,7 +265,7 @@ export default function MongTodo() {
                     value={newTodo}
                     onChange={(e) => setNewTodo(e.target.value)}
                     onKeyPress={handleKeyPress}
-                    placeholder="Add a new todo"
+                    placeholder="새로운 할일을 입력하세요"
                     className="w-full bg-[#111111] border-[#222222] text-gray-200 placeholder:text-gray-500 focus:border-[#333333] focus:outline-none focus:ring-0 focus:ring-offset-0 h-10 pl-10 transition-colors duration-200 rounded-lg"
                     ref={inputRef}
                     aria-label="New todo input"
