@@ -30,10 +30,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [session, setSession] = useState<Session | null>(null)
   const [loading, setLoading] = useState(true)
-  const [mounted, setMounted] = useState(false)
 
   useEffect(() => {
-    setMounted(true)
+    let mounted = true
     
     // 현재 세션 가져오기
     const getSession = async () => {
@@ -41,13 +40,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const { data: { session }, error } = await supabase.auth.getSession()
         if (error) {
           console.error('Error getting session:', error)
+          return
         }
-        setSession(session)
-        setUser(session?.user ?? null)
+        
+        if (mounted) {
+          setSession(session)
+          setUser(session?.user ?? null)
+          setLoading(false)
+        }
       } catch (error) {
         console.error('Error in getSession:', error)
-      } finally {
-        setLoading(false)
+        if (mounted) {
+          setLoading(false)
+        }
       }
     }
 
@@ -56,33 +61,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // 인증 상태 변경 리스너 설정
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        console.log('Auth state changed:', event, session?.user?.email)
-        setSession(session)
-        setUser(session?.user ?? null)
-        setLoading(false)
+        if (mounted) {
+          console.log('Auth state changed:', event, session?.user?.email)
+          setSession(session)
+          setUser(session?.user ?? null)
+          setLoading(false)
+        }
       }
     )
 
-    return () => subscription.unsubscribe()
+    return () => {
+      mounted = false
+      subscription.unsubscribe()
+    }
   }, [])
 
   const signOut = async () => {
     try {
-      await supabase.auth.signOut()
+      const { error } = await supabase.auth.signOut()
+      if (error) {
+        console.error('Error signing out:', error)
+      }
     } catch (error) {
-      console.error('Error signing out:', error)
+      console.error('Error in signOut:', error)
     }
-  }
-
-  // 클라이언트에서만 렌더링하도록 하여 hydration mismatch 방지
-  if (!mounted) {
-    return (
-      <AuthContext.Provider value={{ user: null, session: null, loading: true, signOut }}>
-        <div className="fixed inset-0 bg-black flex items-center justify-center">
-          <div className="text-white">Loading...</div>
-        </div>
-      </AuthContext.Provider>
-    )
   }
 
   return (
