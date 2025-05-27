@@ -2,8 +2,6 @@
 
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { useAuth } from '@/lib/auth'
-import { todoService, type Todo } from '@/lib/supabase'
 
 const snappyTransition = {
   type: "spring",
@@ -12,87 +10,53 @@ const snappyTransition = {
   mass: 1,
 }
 
+interface Todo {
+  id: number
+  text: string
+  completed: boolean
+}
+
 export default function SimpleMongTodo() {
-  const { user, loading: authLoading, signOut } = useAuth()
+  const [isDemoMode, setIsDemoMode] = useState(false)
   const [isExpanded, setIsExpanded] = useState(false)
   const [newTodo, setNewTodo] = useState('')
   const [todos, setTodos] = useState<Todo[]>([])
-  const [isLoading, setIsLoading] = useState(false)
   const [showProfile, setShowProfile] = useState(false)
 
-  // 할일 로드
+  // 데모 데이터 초기화
   useEffect(() => {
-    if (user) {
-      loadTodos()
+    if (isDemoMode && todos.length === 0) {
+      setTodos([
+        { id: 1, text: "Mong 앱 체험해보기", completed: true },
+        { id: 2, text: "할일을 추가해보세요", completed: false },
+        { id: 3, text: "완료된 할일 확인하기", completed: false }
+      ])
     }
-  }, [user])
+  }, [isDemoMode, todos.length])
 
-  const loadTodos = async () => {
-    try {
-      setIsLoading(true)
-      const data = await todoService.getTodos()
-      setTodos(data)
-    } catch (error) {
-      console.error('Failed to load todos:', error)
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  const addTodo = async () => {
+  const addTodo = () => {
     if (!newTodo.trim()) return
     
-    try {
-      await todoService.addTodo(newTodo.trim())
-      setNewTodo('')
-      loadTodos() // 새로고침
-    } catch (error) {
-      console.error('Failed to add todo:', error)
-    }
+    const newId = Math.max(...todos.map(t => t.id), 0) + 1
+    setTodos([...todos, { id: newId, text: newTodo.trim(), completed: false }])
+    setNewTodo('')
   }
 
-  const toggleTodo = async (id: number) => {
-    const todo = todos.find(t => t.id === id)
-    if (!todo) return
-
-    try {
-      await todoService.toggleTodo(id, !todo.completed)
-      loadTodos() // 새로고침
-    } catch (error) {
-      console.error('Failed to toggle todo:', error)
-    }
+  const toggleTodo = (id: number) => {
+    setTodos(todos.map(todo => 
+      todo.id === id ? { ...todo, completed: !todo.completed } : todo
+    ))
   }
 
-  const removeTodo = async (id: number) => {
-    try {
-      await todoService.deleteTodo(id)
-      loadTodos() // 새로고침
-    } catch (error) {
-      console.error('Failed to delete todo:', error)
-    }
+  const removeTodo = (id: number) => {
+    setTodos(todos.filter(todo => todo.id !== id))
   }
 
   const completedTodos = todos.filter(todo => todo.completed).length
   const remainingTodos = todos.length - completedTodos
 
-  // 인증 로딩 중
-  if (authLoading) {
-    return (
-      <motion.div
-        className="fixed left-1/2 top-1/2 transform -translate-x-1/2 -translate-y-1/2 z-50"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-      >
-        <div className="bg-black border border-gray-800 rounded-full px-6 py-3 flex items-center space-x-2">
-          <div className="w-4 h-4 border-2 border-yellow-500 border-t-transparent rounded-full animate-spin"></div>
-          <span className="text-white">로딩 중...</span>
-        </div>
-      </motion.div>
-    )
-  }
-
-  // 인증되지 않은 사용자
-  if (!user) {
+  // 인증되지 않은 사용자 (데모 모드 아님)
+  if (!isDemoMode) {
     return (
       <motion.div 
         className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50"
@@ -110,10 +74,10 @@ export default function SimpleMongTodo() {
           </p>
           <div className="text-center">
             <p className="text-sm text-gray-500 mb-4">
-              데모 버전 - 실제 로그인은 개발 중입니다
+              데모 버전을 체험해보세요
             </p>
             <button 
-              onClick={() => window.location.reload()}
+              onClick={() => setIsDemoMode(true)}
               className="bg-yellow-500 text-black px-6 py-3 rounded-lg font-medium hover:bg-yellow-600 transition-colors"
             >
               체험해보기
@@ -124,7 +88,7 @@ export default function SimpleMongTodo() {
     )
   }
 
-  // 메인 할일 관리 UI
+  // 메인 할일 관리 UI (데모 모드)
   return (
     <>
       <motion.div
@@ -194,57 +158,51 @@ export default function SimpleMongTodo() {
                 </button>
               </div>
 
-              {isLoading ? (
-                <div className="text-center py-4">
-                  <div className="w-4 h-4 border-2 border-yellow-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
-                </div>
-              ) : (
-                <div className="max-h-48 overflow-y-auto">
-                  <AnimatePresence>
-                    {todos.map((todo) => (
-                      <motion.div
-                        key={todo.id}
-                        initial={{ opacity: 0, height: 0 }}
-                        animate={{ opacity: 1, height: "auto" }}
-                        exit={{ opacity: 0, height: 0 }}
-                        transition={snappyTransition}
-                        className="flex items-center justify-between p-2 mb-2 bg-gray-800 rounded"
+              <div className="max-h-48 overflow-y-auto">
+                <AnimatePresence>
+                  {todos.map((todo) => (
+                    <motion.div
+                      key={todo.id}
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: "auto" }}
+                      exit={{ opacity: 0, height: 0 }}
+                      transition={snappyTransition}
+                      className="flex items-center justify-between p-2 mb-2 bg-gray-800 rounded"
+                    >
+                      <span 
+                        className={`text-sm flex-1 cursor-pointer ${
+                          todo.completed 
+                            ? "text-gray-500 line-through" 
+                            : "text-yellow-500"
+                        }`}
+                        onClick={() => toggleTodo(todo.id)}
                       >
-                        <span 
-                          className={`text-sm flex-1 cursor-pointer ${
-                            todo.completed 
-                              ? "text-gray-500 line-through" 
-                              : "text-yellow-500"
-                          }`}
+                        {todo.text}
+                      </span>
+                      <div className="flex items-center gap-1">
+                        <button
                           onClick={() => toggleTodo(todo.id)}
+                          className="text-gray-400 hover:text-white text-sm px-2 py-1"
                         >
-                          {todo.text}
-                        </span>
-                        <div className="flex items-center gap-1">
-                          <button
-                            onClick={() => toggleTodo(todo.id)}
-                            className="text-gray-400 hover:text-white text-sm px-2 py-1"
-                          >
-                            {todo.completed ? "↶" : "✓"}
-                          </button>
-                          <button
-                            onClick={() => removeTodo(todo.id)}
-                            className="text-red-400 hover:text-red-300 text-sm px-2 py-1"
-                          >
-                            ×
-                          </button>
-                        </div>
-                      </motion.div>
-                    ))}
-                  </AnimatePresence>
-                  
-                  {todos.length === 0 && (
-                    <div className="text-center py-8 text-gray-400 text-sm">
-                      할일이 없습니다.<br />새로운 할일을 추가해보세요!
-                    </div>
-                  )}
-                </div>
-              )}
+                          {todo.completed ? "↶" : "✓"}
+                        </button>
+                        <button
+                          onClick={() => removeTodo(todo.id)}
+                          className="text-red-400 hover:text-red-300 text-sm px-2 py-1"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    </motion.div>
+                  ))}
+                </AnimatePresence>
+                
+                {todos.length === 0 && (
+                  <div className="text-center py-8 text-gray-400 text-sm">
+                    할일이 없습니다.<br />새로운 할일을 추가해보세요!
+                  </div>
+                )}
+              </div>
 
               <button
                 onClick={() => setIsExpanded(false)}
@@ -270,21 +228,23 @@ export default function SimpleMongTodo() {
           >
             <div className="flex items-center space-x-3 mb-4">
               <div className="w-8 h-8 bg-yellow-500 rounded-full flex items-center justify-center text-black font-bold">
-                {user?.email?.[0]?.toUpperCase() || '?'}
+                D
               </div>
               <div>
-                <p className="text-white font-medium text-sm">사용자</p>
-                <p className="text-gray-400 text-xs">{user?.email}</p>
+                <p className="text-white font-medium text-sm">데모 사용자</p>
+                <p className="text-gray-400 text-xs">demo@mong.app</p>
               </div>
             </div>
             <button
               onClick={() => {
-                signOut()
+                setIsDemoMode(false)
                 setShowProfile(false)
+                setTodos([])
+                setIsExpanded(false)
               }}
               className="w-full text-left text-gray-300 hover:text-white hover:bg-gray-800 p-2 rounded transition-colors text-sm"
             >
-              로그아웃
+              데모 종료
             </button>
           </motion.div>
         )}
