@@ -31,7 +31,95 @@ export default function MongTodo() {
   const [showProfile, setShowProfile] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
-  // 인증되지 않은 사용자인 경우 AuthModal 표시
+  // 초기 데이터 로드 및 실시간 구독 - 항상 실행
+  useEffect(() => {
+    // 인증된 사용자가 아니면 초기화하지 않음
+    if (!user) {
+      setIsLoading(false)
+      return
+    }
+
+    let subscription: { unsubscribe: () => void } | null = null
+    let mounted = true
+
+    const loadTodos = async () => {
+      try {
+        setIsLoading(true)
+        const data = await todoService.getTodos()
+        if (mounted) {
+          setTodos(data)
+          setError(null)
+        }
+      } catch (error) {
+        console.error('Failed to load todos:', error)
+        if (mounted) {
+          setError('할일을 불러오는데 실패했습니다.')
+        }
+      } finally {
+        if (mounted) {
+          setIsLoading(false)
+        }
+      }
+    }
+
+    // 실시간 구독 설정
+    const setupSubscription = () => {
+      if (mounted) {
+        subscription = todoService.subscribeToTodos((newTodos) => {
+          if (mounted) {
+            setTodos(newTodos)
+          }
+        })
+      }
+    }
+
+    const initializeData = async () => {
+      await loadTodos()
+      if (mounted) {
+        setupSubscription()
+      }
+    }
+
+    initializeData().catch((error) => {
+      console.error('Failed to initialize data:', error)
+      if (mounted) {
+        setError('초기화에 실패했습니다.')
+        setIsLoading(false)
+      }
+    })
+
+    return () => {
+      mounted = false
+      if (subscription && typeof subscription.unsubscribe === 'function') {
+        try {
+          subscription.unsubscribe()
+        } catch (error) {
+          console.error('Failed to unsubscribe:', error)
+        }
+      }
+    }
+  }, [user]) // user를 의존성 배열에 추가
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (isExpanded && !(event.target as Element).closest(".mong-todo")) {
+        setIsExpanded(false)
+      }
+    }
+
+    document.addEventListener("mousedown", handleClickOutside)
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside)
+    }
+  }, [isExpanded])
+
+  useEffect(() => {
+    if (isExpanded && inputRef.current) {
+      inputRef.current.focus()
+    }
+  }, [isExpanded])
+
+  // 로딩 중이거나 인증되지 않은 경우의 렌더링
   if (authLoading) {
     return (
       <motion.div
@@ -102,59 +190,6 @@ export default function MongTodo() {
 
   const completedTodos = todos.filter((todo) => todo.completed).length
   const remainingTodos = todos.length - completedTodos
-
-  // 초기 데이터 로드 및 실시간 구독
-  useEffect(() => {
-    let subscription: any
-
-    const loadTodos = async () => {
-      try {
-        setIsLoading(true)
-        const data = await todoService.getTodos()
-        setTodos(data)
-        setError(null)
-      } catch (error) {
-        console.error('Failed to load todos:', error)
-        setError('할일을 불러오는데 실패했습니다.')
-      } finally {
-        setIsLoading(false)
-      }
-    }
-
-    // 실시간 구독 설정
-    const setupSubscription = () => {
-      subscription = todoService.subscribeToTodos((newTodos) => {
-        setTodos(newTodos)
-      })
-    }
-
-    loadTodos().then(setupSubscription)
-
-    return () => {
-      if (subscription) {
-        subscription.unsubscribe()
-      }
-    }
-  }, [])
-
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (isExpanded && !(event.target as Element).closest(".mong-todo")) {
-        setIsExpanded(false)
-      }
-    }
-
-    document.addEventListener("mousedown", handleClickOutside)
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside)
-    }
-  }, [isExpanded])
-
-  useEffect(() => {
-    if (isExpanded && inputRef.current) {
-      inputRef.current.focus()
-    }
-  }, [isExpanded])
 
   return (
     <motion.div
