@@ -4,6 +4,7 @@ import { motion } from 'framer-motion'
 import { User, LogOut, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useAuth } from '@/lib/auth'
+import { useEffect, useRef } from 'react'
 
 const snappyTransition = {
   type: "spring",
@@ -18,11 +19,25 @@ interface UserProfileProps {
 
 export default function UserProfile({ onClose }: UserProfileProps) {
   const { user, signOut, loading } = useAuth()
+  const mountedRef = useRef(true)
+
+  useEffect(() => {
+    return () => {
+      mountedRef.current = false
+    }
+  }, [])
 
   const handleSignOut = async () => {
     try {
-      await signOut()
+      // 먼저 UI를 닫음
       onClose()
+      
+      // 약간의 지연 후 로그아웃 실행
+      setTimeout(async () => {
+        if (mountedRef.current) {
+          await signOut()
+        }
+      }, 100)
     } catch (error) {
       console.error('Sign out error:', error)
     }
