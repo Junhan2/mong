@@ -3,11 +3,11 @@
 import type React from "react"
 import { useState, useEffect, useRef } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { Pencil, Plus, X, Check, RotateCcw, Loader2, User as UserIcon } from "lucide-react"
+import { Pencil, Plus, X, Check, RotateCcw, Loader2, User as UserIcon, Wifi, WifiOff } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
-import { todoService, type Todo } from "@/lib/supabase"
+import { supabase, todoService, type Todo } from "@/lib/supabase"
 import { useAuth } from "@/lib/auth"
 import AuthModal from "./AuthModal"
 import UserProfile from "./UserProfile"
@@ -30,6 +30,8 @@ export default function MongTodo() {
   const [showProfile, setShowProfile] = useState(false)
   const [editingId, setEditingId] = useState<number | null>(null)
   const [editText, setEditText] = useState("")
+  const [realtimeStatus, setRealtimeStatus] = useState<'connected' | 'connecting' | 'disconnected'>('connecting')
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const editInputRef = useRef<HTMLInputElement>(null)
 
@@ -42,12 +44,20 @@ export default function MongTodo() {
     }
   }, [user, authLoading])
 
-  // Realtime 구독 설정
+  // 실시간 구독 설정 (개선된 버전)
   useEffect(() => {
     if (!user) return
 
+    setRealtimeStatus('connecting')
+    
     const channel = supabase
-      .channel('todos')
+      .channel('todos', {
+        config: {
+          presence: {
+            key: user.id,
+          },
+        },
+      })
       .on(
         'postgres_changes',
         {
@@ -57,14 +67,48 @@ export default function MongTodo() {
           filter: `user_id=eq.${user.id}`,
         },
         (payload) => {
-          console.log('Realtime update:', payload)
+          console.log('🔄 Realtime update received:', payload)
           handleRealtimeUpdate(payload)
+          setLastUpdated(new Date())
         }
       )
-      .subscribe()
+      .subscribe((status) => {
+        console.log('📡 Realtime status:', status)
+        if (status === 'SUBSCRIBED') {
+          setRealtimeStatus('connected')
+        } else if (status === 'CHANNEL_ERROR') {
+          setRealtimeStatus('disconnected')
+        }
+      })
 
     return () => {
+      console.log('🔌 Disconnecting realtime channel')
       supabase.removeChannel(channel)
+      setRealtimeStatus('disconnected')
+    }
+  }, [user])
+
+  // 네트워크 상태 모니터링
+  useEffect(() => {
+    const handleOnline = () => {
+      console.log('🌐 Network: Online')
+      if (user) {
+        // 온라인 복구 시 데이터 다시 로드
+        loadTodos()
+      }
+    }
+
+    const handleOffline = () => {
+      console.log('🌐 Network: Offline')
+      setRealtimeStatus('disconnected')
+    }
+
+    window.addEventListener('online', handleOnline)
+    window.addEventListener('offline', handleOffline)
+
+    return () => {
+      window.removeEventListener('online', handleOnline)
+      window.removeEventListener('offline', handleOffline)
     }
   }, [user])
 
@@ -92,8 +136,10 @@ export default function MongTodo() {
       const data = await todoService.getTodos()
       setTodos(data)
       setError(null)
+      setLastUpdated(new Date())
+      console.log('📥 Todos loaded:', data.length)
     } catch (error: any) {
-      console.error('Error loading todos:', error)
+      console.error('❌ Error loading todos:', error)
       setError('할일을 불러오는데 실패했습니다.')
     } finally {
       setIsLoading(false)
@@ -105,14 +151,23 @@ export default function MongTodo() {
     
     switch (eventType) {
       case 'INSERT':
-        setTodos(prev => [newRecord, ...prev])
+        console.log('➕ Todo added via realtime:', newRecord)
+        setTodos(prev => {
+          // 중복 방지
+          if (prev.some(todo => todo.id === newRecord.id)) {
+            return prev
+          }
+          return [newRecord, ...prev]
+        })
         break
       case 'UPDATE':
+        console.log('✏️ Todo updated via realtime:', newRecord)
         setTodos(prev => prev.map(todo => 
           todo.id === newRecord.id ? newRecord : todo
         ))
         break
       case 'DELETE':
+        console.log('🗑️ Todo deleted via realtime:', oldRecord)
         setTodos(prev => prev.filter(todo => todo.id !== oldRecord.id))
         break
     }
@@ -125,12 +180,13 @@ export default function MongTodo() {
       setIsAdding(true)
       setError(null)
       
-      const todo = await todoService.addTodo(newTodo.trim())
+      console.log('➕ Adding todo:', newTodo.trim())
+      await todoService.addTodo(newTodo.trim())
       setNewTodo("")
       
       // Realtime으로 업데이트되므로 수동으로 추가하지 않음
     } catch (error: any) {
-      console.error('Error adding todo:', error)
+      console.error('❌ Error adding todo:', error)
       setError('할일 추가에 실패했습니다.')
     } finally {
       setIsAdding(false)
@@ -139,20 +195,22 @@ export default function MongTodo() {
 
   const toggleTodo = async (id: number, completed: boolean) => {
     try {
+      console.log(`🔄 Toggling todo ${id} to ${completed ? 'completed' : 'pending'}`)
       await todoService.toggleTodo(id, completed)
       // Realtime으로 업데이트됨
     } catch (error: any) {
-      console.error('Error toggling todo:', error)
+      console.error('❌ Error toggling todo:', error)
       setError('할일 상태 변경에 실패했습니다.')
     }
   }
 
   const deleteTodo = async (id: number) => {
     try {
+      console.log('🗑️ Deleting todo:', id)
       await todoService.deleteTodo(id)
       // Realtime으로 업데이트됨
     } catch (error: any) {
-      console.error('Error deleting todo:', error)
+      console.error('❌ Error deleting todo:', error)
       setError('할일 삭제에 실패했습니다.')
     }
   }
@@ -166,12 +224,13 @@ export default function MongTodo() {
     if (!editText.trim() || !editingId) return
 
     try {
+      console.log(`✏️ Updating todo ${editingId}:`, editText.trim())
       await todoService.updateTodo(editingId, editText.trim())
       setEditingId(null)
       setEditText("")
       // Realtime으로 업데이트됨
     } catch (error: any) {
-      console.error('Error updating todo:', error)
+      console.error('❌ Error updating todo:', error)
       setError('할일 수정에 실패했습니다.')
     }
   }
@@ -243,6 +302,16 @@ export default function MongTodo() {
                 <div className="text-sm font-medium text-white">
                   Mong
                 </div>
+                {/* 실시간 연결 상태 표시 */}
+                <div className="flex items-center">
+                  {realtimeStatus === 'connected' ? (
+                    <Wifi className="w-3 h-3 text-green-500" />
+                  ) : realtimeStatus === 'connecting' ? (
+                    <Loader2 className="w-3 h-3 text-yellow-500 animate-spin" />
+                  ) : (
+                    <WifiOff className="w-3 h-3 text-red-500" />
+                  )}
+                </div>
               </div>
               
               <div className="flex items-center space-x-2">
@@ -286,6 +355,25 @@ export default function MongTodo() {
                 <div className="flex items-center space-x-3">
                   <h1 className="text-xl font-bold text-white">Mong</h1>
                   <div className="flex items-center space-x-2">
+                    {/* 실시간 연결 상태 상세 표시 */}
+                    <div className="flex items-center space-x-1">
+                      {realtimeStatus === 'connected' ? (
+                        <div className="flex items-center space-x-1 text-green-500">
+                          <Wifi className="w-3 h-3" />
+                          <span className="text-xs">실시간</span>
+                        </div>
+                      ) : realtimeStatus === 'connecting' ? (
+                        <div className="flex items-center space-x-1 text-yellow-500">
+                          <Loader2 className="w-3 h-3 animate-spin" />
+                          <span className="text-xs">연결중</span>
+                        </div>
+                      ) : (
+                        <div className="flex items-center space-x-1 text-red-500">
+                          <WifiOff className="w-3 h-3" />
+                          <span className="text-xs">오프라인</span>
+                        </div>
+                      )}
+                    </div>
                     {pendingCount > 0 && (
                       <span className="bg-yellow-500 text-black px-2 py-1 rounded-full text-xs font-bold">
                         {pendingCount}
@@ -318,6 +406,13 @@ export default function MongTodo() {
                   </Button>
                 </div>
               </div>
+
+              {/* 마지막 업데이트 시간 표시 */}
+              {lastUpdated && (
+                <div className="text-xs text-gray-500 mb-4">
+                  마지막 동기화: {lastUpdated.toLocaleTimeString()}
+                </div>
+              )}
 
               {/* 에러 표시 */}
               {error && (
@@ -387,7 +482,7 @@ export default function MongTodo() {
                           animate={{ opacity: 1, x: 0 }}
                           exit={{ opacity: 0, x: 20 }}
                           transition={snappyTransition}
-                          className="flex items-center space-x-3 p-3 bg-gray-900 rounded-lg border border-gray-800"
+                          className="flex items-center space-x-3 p-3 bg-gray-900 rounded-lg border border-gray-800 group"
                         >
                           <Button
                             variant="ghost"
