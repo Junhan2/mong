@@ -78,7 +78,7 @@ export default function DynamicIslandTodo() {
       ))
     } catch (error) {
       console.error('Failed to add todo:', error)
-      setError('할일을 추가하는데 실패했습니다.')
+      setError('Failed to add todo.')
       // 실패시 낙관적 업데이트 롤백
       setTodos(prev => prev.filter(todo => todo.id !== optimisticTodo.id))
       setNewTodo(newTodo.trim())
@@ -100,7 +100,7 @@ export default function DynamicIslandTodo() {
       await todoService.toggleTodo(id, !todo.completed)
     } catch (error) {
       console.error('Failed to toggle todo:', error)
-      setError('할일 상태를 변경하는데 실패했습니다.')
+      setError('Failed to update todo.')
       // 실패시 롤백
       setTodos(prev => prev.map(t => 
         t.id === id ? { ...t, completed: todo.completed } : t
@@ -119,7 +119,7 @@ export default function DynamicIslandTodo() {
       await todoService.deleteTodo(id)
     } catch (error) {
       console.error('Failed to delete todo:', error)
-      setError('할일을 삭제하는데 실패했습니다.')
+      setError('Failed to delete todo.')
       // 실패시 롤백
       setTodos(prev => [...prev, todoToRemove].sort((a, b) => 
         new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
@@ -145,24 +145,24 @@ export default function DynamicIslandTodo() {
   useEffect(() => {
     if (!user) return
 
-    let mounted = true
+    let isSubscribed = true
     let subscription: any
 
     const loadTodos = async () => {
       try {
         setIsLoading(true)
         const data = await todoService.getTodos()
-        if (mounted) {
+        if (isSubscribed) {
           setTodos(data)
           setError(null)
         }
       } catch (error) {
         console.error('Failed to load todos:', error)
-        if (mounted) {
-          setError('할일을 불러오는데 실패했습니다.')
+        if (isSubscribed) {
+          setError('Failed to load todos.')
         }
       } finally {
-        if (mounted) {
+        if (isSubscribed) {
           setIsLoading(false)
         }
       }
@@ -171,7 +171,7 @@ export default function DynamicIslandTodo() {
     // 실시간 구독 설정 (백그라운드 동기화용)
     const setupSubscription = () => {
       subscription = todoService.subscribeToTodos(user.id, (newTodos) => {
-        if (mounted) {
+        if (isSubscribed) {
           console.log('Background sync: updating todos')
           setTodos(newTodos)
         }
@@ -181,7 +181,7 @@ export default function DynamicIslandTodo() {
     loadTodos().then(setupSubscription)
 
     return () => {
-      mounted = false
+      isSubscribed = false
       if (subscription) {
         subscription.unsubscribe()
       }
