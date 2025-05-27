@@ -1,4 +1,4 @@
-import DynamicIslandTodo from "@/components/DynamicIslandTodo"
+import DynamicIslandTodoWrapper from "@/components/DynamicIslandTodoWrapper"
 
 export default function Home() {
   return (
@@ -12,7 +12,7 @@ export default function Home() {
         backgroundRepeat: "no-repeat",
       }}
     >
-      <DynamicIslandTodo />
+      <DynamicIslandTodoWrapper />
     </main>
   )
 }
