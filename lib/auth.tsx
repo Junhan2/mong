@@ -1,6 +1,6 @@
 'use client'
 
-import { createContext, useContext, useEffect, useState } from 'react'
+import { createContext, useContext, useEffect, useState, useRef } from 'react'
 import { User, Session } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
 
@@ -31,9 +31,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null)
   const [loading, setLoading] = useState(true)
   const [mounted, setMounted] = useState(false)
+  const mountedRef = useRef(true)
 
   useEffect(() => {
     setMounted(true)
+    return () => {
+      mountedRef.current = false
+    }
   }, [])
 
   useEffect(() => {
@@ -50,14 +54,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           return
         }
         
-        if (isSubscribed) {
+        if (isSubscribed && mountedRef.current) {
           setSession(session)
           setUser(session?.user ?? null)
           setLoading(false)
         }
       } catch (error) {
         console.error('Error in getSession:', error)
-        if (isSubscribed) {
+        if (isSubscribed && mountedRef.current) {
           setLoading(false)
         }
       }
@@ -68,7 +72,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // 인증 상태 변경 리스너 설정
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
-        if (isSubscribed) {
+        if (isSubscribed && mountedRef.current) {
           console.log('Auth state changed:', event, session?.user?.email)
           setSession(session)
           setUser(session?.user ?? null)
@@ -85,12 +89,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signOut = async () => {
     try {
+      // 즉시 로컬 상태 업데이트
+      if (mountedRef.current) {
+        setUser(null)
+        setSession(null)
+      }
+      
       const { error } = await supabase.auth.signOut()
       if (error) {
         console.error('Error signing out:', error)
+        // 오류 발생시에도 로컬 상태는 이미 null로 설정됨
       }
     } catch (error) {
       console.error('Error in signOut:', error)
+      // 오류 발생시에도 로컬 상태는 이미 null로 설정됨
     }
   }
 
