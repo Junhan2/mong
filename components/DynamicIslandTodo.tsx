@@ -29,6 +29,13 @@ export default function DynamicIslandTodo() {
   const [error, setError] = useState<string | null>(null)
   const [showProfile, setShowProfile] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
+  const mountedRef = useRef(true)
+
+  useEffect(() => {
+    return () => {
+      mountedRef.current = false
+    }
+  }, [])
 
   // 인증 로딩 중일 때
   if (authLoading) {
@@ -52,7 +59,7 @@ export default function DynamicIslandTodo() {
   }
 
   const addTodo = async () => {
-    if (newTodo.trim() === "" || isAdding) return
+    if (newTodo.trim() === "" || isAdding || !mountedRef.current) return
     
     setIsAdding(true)
     setError(null)
@@ -67,27 +74,37 @@ export default function DynamicIslandTodo() {
       user_id: user.id
     }
     
-    setTodos(prev => [optimisticTodo, ...prev])
-    setNewTodo("")
+    if (mountedRef.current) {
+      setTodos(prev => [optimisticTodo, ...prev])
+      setNewTodo("")
+    }
     
     try {
       const newTodoFromDb = await todoService.addTodo(newTodo.trim())
       // 실제 DB 데이터로 교체
-      setTodos(prev => prev.map(todo => 
-        todo.id === optimisticTodo.id ? newTodoFromDb : todo
-      ))
+      if (mountedRef.current) {
+        setTodos(prev => prev.map(todo => 
+          todo.id === optimisticTodo.id ? newTodoFromDb : todo
+        ))
+      }
     } catch (error) {
       console.error('Failed to add todo:', error)
-      setError('Failed to add todo.')
-      // 실패시 낙관적 업데이트 롤백
-      setTodos(prev => prev.filter(todo => todo.id !== optimisticTodo.id))
-      setNewTodo(newTodo.trim())
+      if (mountedRef.current) {
+        setError('Failed to add todo.')
+        // 실패시 낙관적 업데이트 롤백
+        setTodos(prev => prev.filter(todo => todo.id !== optimisticTodo.id))
+        setNewTodo(newTodo.trim())
+      }
     } finally {
-      setIsAdding(false)
+      if (mountedRef.current) {
+        setIsAdding(false)
+      }
     }
   }
 
   const toggleTodo = async (id: number) => {
+    if (!mountedRef.current) return
+    
     const todo = todos.find(t => t.id === id)
     if (!todo) return
 
@@ -100,15 +117,19 @@ export default function DynamicIslandTodo() {
       await todoService.toggleTodo(id, !todo.completed)
     } catch (error) {
       console.error('Failed to toggle todo:', error)
-      setError('Failed to update todo.')
-      // 실패시 롤백
-      setTodos(prev => prev.map(t => 
-        t.id === id ? { ...t, completed: todo.completed } : t
-      ))
+      if (mountedRef.current) {
+        setError('Failed to update todo.')
+        // 실패시 롤백
+        setTodos(prev => prev.map(t => 
+          t.id === id ? { ...t, completed: todo.completed } : t
+        ))
+      }
     }
   }
 
   const removeTodo = async (id: number) => {
+    if (!mountedRef.current) return
+    
     const todoToRemove = todos.find(t => t.id === id)
     if (!todoToRemove) return
 
@@ -119,11 +140,13 @@ export default function DynamicIslandTodo() {
       await todoService.deleteTodo(id)
     } catch (error) {
       console.error('Failed to delete todo:', error)
-      setError('Failed to delete todo.')
-      // 실패시 롤백
-      setTodos(prev => [...prev, todoToRemove].sort((a, b) => 
-        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-      ))
+      if (mountedRef.current) {
+        setError('Failed to delete todo.')
+        // 실패시 롤백
+        setTodos(prev => [...prev, todoToRemove].sort((a, b) => 
+          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        ))
+      }
     }
   }
 
@@ -150,19 +173,21 @@ export default function DynamicIslandTodo() {
 
     const loadTodos = async () => {
       try {
-        setIsLoading(true)
+        if (mountedRef.current) {
+          setIsLoading(true)
+        }
         const data = await todoService.getTodos()
-        if (isSubscribed) {
+        if (isSubscribed && mountedRef.current) {
           setTodos(data)
           setError(null)
         }
       } catch (error) {
         console.error('Failed to load todos:', error)
-        if (isSubscribed) {
+        if (isSubscribed && mountedRef.current) {
           setError('Failed to load todos.')
         }
       } finally {
-        if (isSubscribed) {
+        if (isSubscribed && mountedRef.current) {
           setIsLoading(false)
         }
       }
@@ -171,7 +196,7 @@ export default function DynamicIslandTodo() {
     // 실시간 구독 설정 (백그라운드 동기화용)
     const setupSubscription = () => {
       subscription = todoService.subscribeToTodos(user.id, (newTodos) => {
-        if (isSubscribed) {
+        if (isSubscribed && mountedRef.current) {
           console.log('Background sync: updating todos')
           setTodos(newTodos)
         }
@@ -191,7 +216,9 @@ export default function DynamicIslandTodo() {
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (isExpanded && !(event.target as Element).closest(".dynamic-island-todo")) {
-        setIsExpanded(false)
+        if (mountedRef.current) {
+          setIsExpanded(false)
+        }
       }
     }
 
@@ -202,7 +229,7 @@ export default function DynamicIslandTodo() {
   }, [isExpanded])
 
   useEffect(() => {
-    if (isExpanded && inputRef.current) {
+    if (isExpanded && inputRef.current && mountedRef.current) {
       inputRef.current.focus()
     }
   }, [isExpanded])
@@ -223,7 +250,7 @@ export default function DynamicIslandTodo() {
     >
       <motion.div
         className="bg-black text-white h-full cursor-pointer overflow-hidden rounded-[inherit] border border-gray-800"
-        onClick={() => !isExpanded && setIsExpanded(true)}
+        onClick={() => !isExpanded && mountedRef.current && setIsExpanded(true)}
         layout
         transition={snappyTransition}
       >
@@ -248,7 +275,9 @@ export default function DynamicIslandTodo() {
                   <button
                     onClick={(e) => {
                       e.stopPropagation()
-                      setShowProfile(!showProfile)
+                      if (mountedRef.current) {
+                        setShowProfile(!showProfile)
+                      }
                     }}
                     className="w-6 h-6 bg-gray-700 hover:bg-gray-600 rounded-full flex items-center justify-center transition-colors"
                   >
@@ -284,7 +313,7 @@ export default function DynamicIslandTodo() {
                   <Input
                     type="text"
                     value={newTodo}
-                    onChange={(e) => setNewTodo(e.target.value)}
+                    onChange={(e) => mountedRef.current && setNewTodo(e.target.value)}
                     onKeyPress={handleKeyPress}
                     placeholder="Add a new todo"
                     className="w-full bg-[#111111] border-[#222222] text-gray-200 placeholder:text-gray-500 focus:border-[#333333] focus:outline-none focus:ring-0 focus:ring-offset-0 h-10 pl-10 transition-colors duration-200 rounded-lg"
@@ -307,7 +336,7 @@ export default function DynamicIslandTodo() {
                 <div className="mb-2 p-2 bg-red-900/50 border border-red-800 rounded-lg text-red-200 text-sm">
                   {error}
                   <Button
-                    onClick={() => setError(null)}
+                    onClick={() => mountedRef.current && setError(null)}
                     variant="ghost"
                     size="sm"
                     className="ml-2 p-0 h-auto text-red-200 hover:text-red-100"
@@ -328,7 +357,7 @@ export default function DynamicIslandTodo() {
                   </div>
                 ) : (
                   <AnimatePresence initial={false}>
-                    {sortedTodos.map((todo, index) => (
+                    {sortedTodos.map((todo) => (
                     <motion.li
                       key={todo.id}
                       initial={{ opacity: 0, height: 0 }}
@@ -381,7 +410,7 @@ export default function DynamicIslandTodo() {
       {/* 사용자 프로필 */}
       <AnimatePresence>
         {showProfile && (
-          <UserProfile onClose={() => setShowProfile(false)} />
+          <UserProfile onClose={() => mountedRef.current && setShowProfile(false)} />
         )}
       </AnimatePresence>
     </motion.div>
