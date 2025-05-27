@@ -12,6 +12,7 @@ export interface Todo {
   completed: boolean
   created_at: string
   updated_at: string
+  user_id: string
 }
 
 // Database operations
@@ -78,13 +79,20 @@ export const todoService = {
   },
 
   // 실시간 구독 (현재 사용자만)
-  subscribeToTodos(callback: (todos: Todo[]) => void) {
+  subscribeToTodos(userId: string, callback: (todos: Todo[]) => void) {
+    console.log('Setting up subscription for user:', userId)
+    
     return supabase
-      .channel('todos')
+      .channel(`todos-${userId}`)
       .on('postgres_changes', 
-        { event: '*', schema: 'public', table: 'todos' },
-        async () => {
-          // 변경 사항이 있을 때마다 최신 데이터를 가져와서 콜백 실행
+        { 
+          event: '*', 
+          schema: 'public', 
+          table: 'todos',
+          filter: `user_id=eq.${userId}`
+        },
+        async (payload) => {
+          console.log('Real-time update received:', payload)
           try {
             const todos = await this.getTodos()
             callback(todos)
@@ -93,6 +101,8 @@ export const todoService = {
           }
         }
       )
-      .subscribe()
+      .subscribe((status) => {
+        console.log('Subscription status:', status)
+      })
   }
 }
